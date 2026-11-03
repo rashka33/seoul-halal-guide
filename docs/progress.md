@@ -2,7 +2,7 @@
 Approved design: docs/DESIGN.md; plan: docs/superpowers/plans/2026-11-03-guide.md.
 Task 1 complete: five domain tests observed failing for missing implementation, then passing.
 Task 2 complete: 14 browser checks passed against the static localhost page, including all five acceptance cases, six live methods, failure states and Seoul midnight with a Denver device timezone. Desktop/mobile screenshots inspected at 1440/390; 320px overflow check passed.
-Task 3 maintenance docs complete; GitHub repository created, publication in progress.
+Task 3 complete: all deliverables uploaded to https://github.com/rashka33/seoul-halal-guide. GitHub Pages run 41606345608 succeeded. Public URL https://rashka33.github.io/seoul-halal-guide/ loaded successfully in the built-in browser with live prayer timings, API Hijri date, Qibla bearing, one current mosque and ten pending places; warning/error log empty. Full seven-test suite green. Local main tracks origin/main.
 Review fixes: reproduced muted-audio and undersized-pin failures before fixes. Audio cleanup now restores volume, including rejection paths; pins have a 44px interactive target with a smaller visual dot. Both regressions pass.
 Ruling: the approved written design is the visual specification; no new image concept or unapproved redesign introduced after approval.
 Ruling: a fresh local repository directory is the isolation boundary because no repository existed to create a worktree from.

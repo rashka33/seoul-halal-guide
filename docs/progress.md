@@ -1,0 +1,13 @@
+# Execution ledger
+Approved design: docs/DESIGN.md; plan: docs/superpowers/plans/2026-11-03-guide.md.
+Task 1 complete: five domain tests observed failing for missing implementation, then passing.
+Task 2 complete: 14 browser checks passed against the static localhost page, including all five acceptance cases, six live methods, failure states and Seoul midnight with a Denver device timezone. Desktop/mobile screenshots inspected at 1440/390; 320px overflow check passed.
+Task 3 maintenance docs complete; GitHub repository created, publication in progress.
+Review fixes: reproduced muted-audio and undersized-pin failures before fixes. Audio cleanup now restores volume, including rejection paths; pins have a 44px interactive target with a smaller visual dot. Both regressions pass.
+Ruling: the approved written design is the visual specification; no new image concept or unapproved redesign introduced after approval.
+Ruling: a fresh local repository directory is the isolation boundary because no repository existed to create a worktree from.
+Ruling: preserve all ten seed businesses as hidden; mosque confidence remains grey, with the official KMF source.
+Review disposition: source independence/recency remain human desk-check responsibilities, as required by the approved schema and DESK_CHECK.md. Two hostnames are an additional minimum safeguard, not proof of independence or recency. No business has been promoted based on a URL count.
+Visual fidelity inspection: white background and specified greens; Georgia site name and system controls; prayer-first desktop layout and 3x2 mobile grid; Friday note immediately below prayers; desktop map/cards in two columns, stacked mobile; text-backed tier badges and truthful pending count. No clipping or horizontal overflow found. Introductory copy and trust explanations are deliberate editorial copy supporting the approved guide, not added product features. No visual assets or image concept required by the approved written design.
+Accessibility: current Vercel web-interface guidelines reviewed. Semantic controls, labels, skip link, visible focus, reduced-motion rule, status announcements, tabular prayer figures, source links, 44px pin/zoom targets and visible OSM attribution checked. Automated mobile axe audit: zero violations.
+Test-environment corrections: replaced fixed countdown sleep with condition-based assertion; expected auto-toggle immediate reset is tested with click rather than check; fixture downloads use system TLS instead of Python’s missing CA store. These did not require production changes.

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123e32">
+  <meta name="description" content="A small, careful guide to prayer and halal places around Seoul Central Mosque in Itaewon. Every published place shows its sources and check date.">
+  <title>Seoul Halal Guide — Itaewon</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="assets/vendor/leaflet/leaflet.js"></script>
+  <script defer src="data/places.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to guide</a>
+<header class="site-header wrap">
+  <div><h1>Seoul Halal Guide<span class="brand-dot" aria-hidden="true">.</span></h1><p>One neighborhood. A little more peace of mind.</p></div>
+  <div class="header-place"><strong>Seoul, South Korea</strong><time id="gregorian-date"></time><span id="hijri-date">Hijri date loading…</span></div>
+</header>
+<main id="main" class="wrap">
+  <section class="prayer-panel" aria-labelledby="prayer-heading">
+    <div class="prayer-heading"><div><h2 id="prayer-heading">Prayer times</h2><p>Itaewon · Seoul time (KST, UTC+9)</p></div><div class="next-prayer"><span>Next prayer</span><strong id="countdown" role="timer" aria-live="off">Loading…</strong></div></div>
+    <div id="prayer-grid" class="prayer-grid" aria-label="Today’s prayer times"></div>
+    <div class="prayer-controls">
+      <label class="method-label" for="method">Calculation method<select id="method" name="method"><option value="3">Muslim World League</option><option value="2">ISNA</option><option value="4">Umm Al-Qura</option><option value="13">Diyanet (experimental)</option><option value="17">JAKIM</option><option value="20">Kemenag</option></select></label>
+      <fieldset class="school"><legend>Asr school</legend><div><label><input type="radio" name="school" value="0" checked><span>Shafi</span></label><label><input type="radio" name="school" value="1"><span>Hanafi</span></label></div></fieldset>
+      <button id="retry-prayers" class="quiet-button" type="button">Refresh times</button>
+    </div>
+    <p id="prayer-status" class="panel-status" role="status">Fetching today’s timings from AlAdhan…</p>
+    <div class="prayer-bottom"><div class="adhan-controls"><button id="play-adhan" class="light-button" type="button"><svg aria-hidden="true" viewBox="0 0 20 20"><path d="m7 4 9 6-9 6Z" fill="currentColor"/></svg>Play Adhan</button><label class="auto-label"><input id="auto-adhan" type="checkbox" name="auto-adhan">Play adhan automatically when a prayer time arrives while this page is open</label><p id="audio-status" class="small" role="status">Audio placeholder · add a recording to enable playback. No background or push adhan.</p></div>
+      <div class="qibla"><div class="compass" aria-hidden="true"><span>N</span><svg id="qibla-arrow" viewBox="0 0 40 40"><path d="m20 5 9 28-9-6-9 6Z" fill="currentColor"/></svg></div><div><strong>Qibla</strong><p id="qibla-bearing">Loading bearing…</p><span>Clockwise from true north</span><button id="retry-qibla" type="button" hidden>Retry Qibla</button></div></div>
+    </div>
+  </section>
+  <aside class="mosque-note" aria-labelledby="friday-heading"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4v3m12-3v3M4 10h16M5 6h14a1 1 0 0 1 1 1v13H4V7a1 1 0 0 1 1-1Zm3 8h3v3H8Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><div><h2 id="friday-heading">A note for Friday</h2><p id="mosque-note-text"></p></div></aside>
+  <section class="neighborhood" aria-labelledby="places-heading">
+    <div class="section-heading"><div><h2 id="places-heading">Around the mosque</h2><p>Small by choice. Every place has a basis and a check date.</p></div><a class="text-link" href="#trust">How to read the tiers</a></div>
+    <div class="filters" aria-label="Filter places"><label for="type-filter">Place type<select id="type-filter" name="type"><option value="all">All places</option><option value="restaurant">Restaurants</option><option value="grocery">Groceries</option><option value="prayer_room">Prayer rooms</option><option value="mosque">Mosque</option></select></label><label for="tier-filter">Halal confidence<select id="tier-filter" name="tier"><option value="all">All tiers</option><option value="certified_seen">Certificate seen</option><option value="cross_checked">Cross-checked</option><option value="self_declared">Self-declared</option><option value="unverified">Unverified</option></select></label><label class="near-filter"><input id="near-filter" name="near" type="checkbox">Near the mosque <span>within ~15 min / 1.1 km</span></label></div>
+    <p id="result-count" class="result-count" role="status"></p>
+    <div class="explore-layout"><div class="map-column"><div id="map" aria-label="Map of currently shown places near Seoul Central Mosque"></div><p id="map-status" class="small" role="status"></p><ul class="map-legend" aria-label="Map key"><li><i class="dot mosque" aria-hidden="true"></i>Mosque</li><li><i class="dot restaurant" aria-hidden="true"></i>Restaurant</li><li><i class="dot grocery" aria-hidden="true"></i>Grocery</li><li><i class="dot prayer_room" aria-hidden="true"></i>Prayer room</li></ul><p class="map-footnote">Distances are straight-line estimates from the mosque. Walking minutes assume 5 km/h; hills and routes take longer. Use Naver for walking directions.</p></div><div><div id="listings" class="listings"></div><div id="empty-state" class="empty-state" hidden><h3>No current places match</h3><p>Try another filter. Places awaiting a desk check stay hidden until their information is checked.</p><button id="reset-filters" type="button">Reset filters</button></div><div class="pending-note"><strong id="pending-count"></strong><p>Unchecked or older than 90 days? Hidden until re-checked. We’ll grow this guide one careful listing at a time.</p></div></div></div>
+  </section>
+  <section id="trust" class="trust" aria-labelledby="trust-heading"><div><h2 id="trust-heading">A claim you can trace.</h2><p>Read the basis, open the sources, check the date. A badge describes the evidence we found.</p></div><dl><div><dt><span class="badge certified_seen">Certificate seen</span></dt><dd>Certificate found online, with a future expiry.</dd></div><div><dt><span class="badge cross_checked">Cross-checked</span></dt><dd>Two or more independent, recent sources agree.</dd></div><div><dt><span class="badge self_declared">Self-declared</span></dt><dd>The business itself claims halal.</dd></div><div><dt><span class="badge unverified">Unverified</span></dt><dd>Insufficient evidence for a higher tier.</dd></div></dl></section>
+</main>
+<footer class="wrap"><strong>Seoul Halal Guide</strong><p>Halal information is desk research from public sources, not an inspection or a religious ruling. Certification and opening status change — confirm before you go.</p><p class="footer-credit">Prayer calculations by <a href="https://aladhan.com/prayer-times-api">AlAdhan</a>. A free, independent neighborhood guide.</p></footer>
+<noscript><p class="wrap">Enable JavaScript to load prayer times, the map, and date-checked listings.</p></noscript>
+</body>
+</html>

@@ -1,0 +1,16 @@
+# Desk-check one listing
+
+A check date means a person actually reviewed the evidence on that date. Do not refresh dates automatically. No inference from a name, menu, neighborhood, proprietor’s nationality, or old certificate.
+
+1. **KTO directory:** look up the exact branch in Korea Tourism Organization’s Muslim-friendly restaurant material. Record its category as published. A KTO category alone is not a current certificate. Check publication/update date.
+2. **Business’s own site or Instagram:** find the actual halal claim and branch address. Record the exact URL, date reviewed and the scope of the claim. Note alcohol or mixed menus if explicitly stated. Unknown stays null.
+3. **Certificate:** find a legible certificate photo or certifier listing, exact business/branch, issuer, scope and expiry. `certified_seen` requires expiry in the future. Past, same-day, missing or unreadable expiry means no certificate tier. Record `certifier`, `certificateUrl`, `certificateExpiry` and include the certificate URL in `sources`.
+4. **Recent Google reviews:** read Muslim diners’ reviews from the last 90 days mentioning halal. Evaluate the actual claim, recency, independence and contradictions. Link the useful review/listing and describe what was seen in `halalBasis` or `notes`. A generic rating or a review’s author identity alone is insufficient.
+5. **Naver listing:** confirm the branch’s current open status, address, entrance coordinates and any hours you record. If closed, remove it from active data or leave the check date empty so it remains hidden. Record Naver first for directions; Google second. Naver open status does not itself establish halal status.
+6. **Resolve evidence:** choose the lowest supportable tier. `cross_checked` needs **two or more independent recent sources that agree**; repeated posts, two pages from the business, or copied directory entries count as one source. A business claim plus an independent recent source may qualify only when both genuinely address the claim. If only the business claims halal, use `self_declared`. If evidence is insufficient or contradictory, use `unverified` and explain why. A distinct-hostname code check cannot prove independence—this is your responsibility.
+7. **Record:** fill `tier`, a short specific `halalBasis`, all actual source URLs, `lastChecked` in `YYYY-MM-DD`, and known facts. Keep unknown alcohol/prayer-space/price/hours/certifier values `null`. Grocery claims should state product scope; a store selling halal products is not a blanket assurance about every item.
+8. **Preview:** confirm the card, distance, Naver/Google links and map pin; verify certificate expiry and source count. Never use absolute assurance wording. Check again before 90 days elapse. Missing/invalid/future dates and dates over 90 days are hidden and marked stale at runtime.
+
+Suggested basis: “Business menu claims halal; KTO branch directory agrees (directory updated [date], both read [date]). Certificate expiry not found.” Only use this if you actually read those sources and dates.
+
+Friday advisory is editorial text supplied for this guide. Confirm changes with the mosque; do not invent a fixed Jumu’ah time from calculated Dhuhr.

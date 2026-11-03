@@ -1,0 +1,2 @@
+# Adhan recording
+`adhan.mp3` is an intentionally empty placeholder, not a recording. Replace it with a playable MP3 you have permission to distribute. The page reports the missing recording honestly. No audio is fetched until Play Adhan or the automatic toggle is pressed. The opt-in toggle requires a gesture in each tab/session. Automatic playback is best effort while this page is visible and open; browser suspension and audio policies can prevent it. No push, service worker or background alerts.

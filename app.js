@@ -1,4 +1,4 @@
-/* Static guide. No credentials, geolocation or background notifications. */
+/* Static guide. No credentials or background notifications. Geolocation runs only after a Near me tap and stays in memory. */
 (() => {
   'use strict';
   const MOSQUE = [37.5331, 126.9969];
@@ -21,11 +21,12 @@
   }
   function shiftDate(date, days) { return new Date(Date.parse(date+'T00:00:00Z') + days * DAY).toISOString().slice(0,10); }
   function safeUrl(url) { try { const parsed = new URL(url); return parsed.protocol === 'https:' ? parsed.href : null; } catch { return null; } }
-  function distance(lat,lng) {
+  function distanceBetween(from,lat,lng) {
     const rad = n => n*Math.PI/180;
-    const a = Math.sin(rad(lat-MOSQUE[0])/2)**2 + Math.cos(rad(MOSQUE[0]))*Math.cos(rad(lat))*Math.sin(rad(lng-MOSQUE[1])/2)**2;
+    const a = Math.sin(rad(lat-from[0])/2)**2 + Math.cos(rad(from[0]))*Math.cos(rad(lat))*Math.sin(rad(lng-from[1])/2)**2;
     return 6371 * 2 * Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
   }
+  function distance(lat,lng) { return distanceBetween(MOSQUE,lat,lng); }
   function annotatePlaces(places, today) {
     return places.map(p => {
       const age = validDate(p.lastChecked) ? (Date.parse(today)-Date.parse(p.lastChecked))/DAY : NaN;
@@ -42,6 +43,9 @@
   function filterPlaces(places, filters) {
     return places.filter(p => !p.stale && Number.isFinite(p.distanceKm) && (filters.type==='all'||p.type===filters.type) && (filters.tier==='all'||p.effectiveTier===filters.tier) && (!filters.near || p.distanceKm<=1.1)).sort((a,b)=>a.distanceKm-b.distanceKm);
   }
+  function sortByUser(places, user) {
+    return places.map(p=>({...p,userKm:distanceBetween(user,p.lat,p.lng)})).sort((a,b)=>a.userKm-b.userKm);
+  }
   function prayerEpoch(date,time) {
     const match = String(time).match(/^(\d{2}):(\d{2})(?:\s|$)/);
     if (!validDate(date) || !match || +match[1]>23 || +match[2]>59) return NaN;
@@ -50,7 +54,7 @@
   function nextPrayer(days,now) {
     return days.flatMap(d=>PRAYERS.map(name=>({name,date:d.date,epoch:prayerEpoch(d.date,d.timings[name])}))).filter(p=>p.epoch>now).sort((a,b)=>a.epoch-b.epoch)[0] || null;
   }
-  window.GuideCore = {seoulDate,validDate,shiftDate,annotatePlaces,filterPlaces,prayerEpoch,nextPrayer};
+  window.GuideCore = {seoulDate,validDate,shiftDate,annotatePlaces,filterPlaces,sortByUser,prayerEpoch,nextPrayer};
   if (!document.querySelector('#prayer-grid')) return;
 
   const $ = id => document.getElementById(id);
@@ -62,6 +66,8 @@
   let settings = storage.get('shg:settings') || {};
   settings = {method:METHODS.includes(String(settings.method))?String(settings.method):'3',school:String(settings.school)==='1'?'1':'0',auto:settings.auto===true};
   let today=seoulDate(), records=[], visible=[], map=null, markers=null, days=[], generation=0, loading=false;
+  // In memory only: never stored, logged or exposed on window.
+  let userLoc=null, userMarker=null;
   let lastTick=Date.now(), audio=null, audioObjectUrl=null, audioReady=null, audioArmedAt=Infinity;
   const played=new Set();
   const filters={type:'all',tier:'all',near:false};
@@ -90,7 +96,7 @@
   function fact(label,value) { return el('p','',`${label}: ${value}`); }
   function card(p) {
     const article=el('article','place-card');article.id=`place-${p.id}`;article.tabIndex=-1;
-    const meta=el('div','card-meta');meta.append(el('span','',TYPES[p.type]||'Place'),el('span','distance',`${p.distanceKm.toFixed(2)} km · ~${Math.round(p.distanceKm/5*60)} min walk`));
+    const meta=el('div','card-meta');meta.append(el('span','',TYPES[p.type]||'Place'),el('span','distance',userLoc?`${p.userKm.toFixed(2)} km from you`:`${p.distanceKm.toFixed(2)} km · ~${Math.round(p.distanceKm/5*60)} min walk`));
     const title=el('h3','',p.name),address=el('p','address',p.address);
     const badge=el('span',`badge ${p.effectiveTier}`,TIERS[p.effectiveTier]);
     const basis=el('div','check-basis');basis.append(el('strong','',`Checked on ${p.lastChecked} — ${TIERS[p.effectiveTier].toLowerCase()}`),el('p','',p.halalBasis||'No basis recorded.'));
@@ -108,9 +114,10 @@
   }
   function renderPlaces() {
     visible=filterPlaces(records,filters);
+    if(userLoc)visible=sortByUser(visible,userLoc);
     $('listings').replaceChildren(...visible.map(card));
     $('empty-state').hidden=visible.length>0;
-    $('result-count').textContent=`${visible.length} current ${visible.length===1?'place':'places'} · nearest to Seoul Central Mosque first`;
+    $('result-count').textContent=`${visible.length} current ${visible.length===1?'place':'places'} · ${userLoc?'sorted by distance from you':'nearest to Seoul Central Mosque first'}`;
     if (!markers) return;
     markers.clearLayers();
     for (const p of visible) {
@@ -153,6 +160,31 @@
     map=L.map('map',{scrollWheelZoom:false}).setView(MOSQUE,16);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'}).on('tileerror',()=>{$('map-status').textContent='Some map tiles could not load. Listing directions still work.';}).addTo(map);
     markers=L.layerGroup().addTo(map);renderPlaces();
+  }
+  function showUserOnMap() {
+    if(!map)return;
+    if(!userMarker){
+      const icon=L.divIcon({className:'you-pin',html:el('span','you-dot'),iconSize:[24,24],iconAnchor:[12,12]});
+      userMarker=L.marker(userLoc,{icon,title:'You are here',keyboard:false,zIndexOffset:1000}).bindTooltip('You are here',{permanent:true,direction:'top',offset:[0,-12]}).addTo(map);
+    }
+    userMarker.setLatLng(userLoc);map.setView(userLoc,15);
+  }
+  function setNearMe(active) { $('near-me').hidden=active;$('near-me-reset').hidden=!active; }
+  function locationFailed() { $('near-me').disabled=false;$('near-me-status').textContent='Location unavailable — showing distance from the mosque instead'; }
+  function useNearMe() {
+    if(!navigator.geolocation){locationFailed();return;}
+    $('near-me').disabled=true;$('near-me-status').textContent='';
+    navigator.geolocation.getCurrentPosition(position=>{
+      const {latitude,longitude}=position.coords;
+      if(!Number.isFinite(latitude)||!Number.isFinite(longitude)){locationFailed();return;}
+      $('near-me').disabled=false;userLoc=[latitude,longitude];setNearMe(true);renderPlaces();showUserOnMap();
+    },locationFailed,{timeout:10000});
+  }
+  function resetNearMe() {
+    userLoc=null;setNearMe(false);
+    if(userMarker){userMarker.remove();userMarker=null;}
+    if(map)map.setView(MOSQUE,16);
+    renderPlaces();$('near-me').focus();
   }
   function renderPrayers() {
     const d=days.find(d=>d.date===today);
@@ -254,6 +286,7 @@
   });
   for(const [id,key] of [['type-filter','type'],['tier-filter','tier'],['near-filter','near']])$(id).addEventListener('change',()=>{filters[key]=key==='near'?$(id).checked:$(id).value;renderPlaces();});
   $('reset-filters').addEventListener('click',()=>{Object.assign(filters,{type:'all',tier:'all',near:false});$('type-filter').value='all';$('tier-filter').value='all';$('near-filter').checked=false;renderPlaces();});
+  $('near-me').addEventListener('click',useNearMe);$('near-me-reset').addEventListener('click',resetNearMe);
   document.addEventListener('visibilitychange',()=>{lastTick=Date.now();if(document.visibilityState==='visible'){tick();if(!days.length&&!loading)loadPrayers();}});
   window.addEventListener('online',()=>{loadPrayers();loadQibla();});
   updateDates();refreshRecords();initMap();loadPrayers();loadQibla();setInterval(tick,1000);

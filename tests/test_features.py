@@ -305,12 +305,65 @@ class PhraseTests(FeatureTestCase):
         self.open_overlay(page)
         expect(page.locator('#overlay-ko')).to_have_text('안녕하세요')
 
+class CompassTests(FeatureTestCase):
+    BEARING_ONLY = "rotate(292deg)"
+
+    def ready(self, init_script=''):
+        page = self.open(init_script)
+        expect(page.locator('#qibla-bearing')).to_have_text('292.0°')
+        return page
+
+    def fire(self, page, alpha):
+        page.evaluate("alpha => window.dispatchEvent(new DeviceOrientationEvent('deviceorientationabsolute', {alpha, absolute: true}))", alpha)
+
+    def test_heading_math(self):
+        page = self.ready()
+        self.assertEqual(page.evaluate("GuideCore.headingFromEvent({webkitCompassHeading: 40, alpha: 1, absolute: true})"), 40)
+        self.assertEqual(page.evaluate("GuideCore.headingFromEvent({alpha: 90, absolute: true})"), 270)
+        self.assertIsNone(page.evaluate("GuideCore.headingFromEvent({alpha: 90, absolute: false})"))
+        self.assertEqual(page.evaluate("GuideCore.arrowRotation(292, 300)"), 352)
+
+    def test_arrow_follows_heading_then_stop_restores_bearing(self):
+        page = self.ready()
+        page.locator('#use-compass').click()
+        expect(page.locator('#use-compass')).to_have_text('Stop compass')
+        self.fire(page, 90)
+        self.assertEqual(page.locator('#qibla-arrow').evaluate('n => n.style.transform'), 'rotate(22deg)')
+        expect(page.locator('#qibla-bearing')).to_have_text('292.0°')
+        page.locator('#use-compass').click()
+        self.assertEqual(page.locator('#qibla-arrow').evaluate('n => n.style.transform'), self.BEARING_ONLY)
+        self.fire(page, 10)
+        self.assertEqual(page.locator('#qibla-arrow').evaluate('n => n.style.transform'), self.BEARING_ONLY)
+
+    def assert_falls_back(self, page):
+        expect(page.locator('#compass-status')).to_have_text('Compass unavailable on this device. Use the bearing above.', timeout=6000)
+        expect(page.locator('#qibla-bearing')).to_have_text('292.0°')
+        expect(page.locator('#use-compass')).to_have_text('Use compass')
+        self.assertEqual(page.locator('#qibla-arrow').evaluate('n => n.style.transform'), self.BEARING_ONLY)
+
+    def test_permission_is_requested_only_after_tap_and_denial_falls_back(self):
+        page = self.ready("window.asks = 0; DeviceOrientationEvent.requestPermission = async () => { window.asks++; return 'denied'; };")
+        self.assertEqual(page.evaluate('asks'), 0)
+        page.locator('#use-compass').click()
+        self.assert_falls_back(page)
+        self.assertEqual(page.evaluate('asks'), 1)
+
+    def test_no_sensor_support_falls_back(self):
+        page = self.ready('delete window.DeviceOrientationEvent;')
+        page.locator('#use-compass').click()
+        self.assert_falls_back(page)
+
+    def test_no_reading_times_out_to_fallback(self):
+        page = self.ready()
+        page.locator('#use-compass').click()
+        self.assert_falls_back(page)
+
 class IntegrityTests(unittest.TestCase):
-    SITE = ['index.html', 'app.js', 'styles.css', 'sw.js', 'data/places.js', 'data/phrases.js', 'README.md', 'DESK_CHECK.md', 'docs/DESIGN.md']
+    SITE = ['index.html', 'app.js', 'styles.css', 'sw.js', 'data/places.js', 'data/phrases.js', 'README.md', 'DESK_CHECK.md', 'docs/DESIGN.md', 'tests/test_features.py']
 
     def test_no_banned_wording(self):
         for name in self.SITE:
-            self.assertNotIn('verified halal', (ROOT / name).read_text().lower(), name)
+            self.assertNotIn('verified' + ' halal', (ROOT / name).read_text().lower(), name)
 
     def test_only_the_two_approved_commas_differ_from_the_supplied_phrases(self):
         data = (ROOT / 'data/phrases.js').read_bytes()

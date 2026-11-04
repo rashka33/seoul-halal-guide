@@ -59,6 +59,12 @@
     const q=query.trim().toLowerCase();
     return phrases.filter(p=>(category==='all'||p.category===category)&&(!q||p.en.toLowerCase().includes(q)||p.romanization.toLowerCase().includes(q)));
   }
+  // iOS reports webkitCompassHeading; elsewhere only an absolute alpha has a north reference.
+  function headingFromEvent(e) {
+    if(Number.isFinite(e.webkitCompassHeading))return e.webkitCompassHeading;
+    return e.absolute===true&&Number.isFinite(e.alpha)?(360-e.alpha)%360:null;
+  }
+  function arrowRotation(bearing,heading) { return ((bearing-heading)%360+360)%360; }
   function prayerEpoch(date,time) {
     const match = String(time).match(/^(\d{2}):(\d{2})(?:\s|$)/);
     if (!validDate(date) || !match || +match[1]>23 || +match[2]>59) return NaN;
@@ -67,7 +73,7 @@
   function nextPrayer(days,now) {
     return days.flatMap(d=>PRAYERS.map(name=>({name,date:d.date,epoch:prayerEpoch(d.date,d.timings[name])}))).filter(p=>p.epoch>now).sort((a,b)=>a.epoch-b.epoch)[0] || null;
   }
-  window.GuideCore = {seoulDate,validDate,shiftDate,annotatePlaces,filterPlaces,sortByUser,naverRouteUrl,googleRouteUrl,matchPhrases,prayerEpoch,nextPrayer};
+  window.GuideCore = {seoulDate,validDate,shiftDate,annotatePlaces,filterPlaces,sortByUser,naverRouteUrl,googleRouteUrl,matchPhrases,headingFromEvent,arrowRotation,prayerEpoch,nextPrayer};
   if (!document.querySelector('#prayer-grid')) return;
 
   const $ = id => document.getElementById(id);
@@ -269,8 +275,35 @@
   }
   async function loadQibla() {
     $('retry-qibla').hidden=true;
-    try{const result=await fetchJson('https://api.aladhan.com/v1/qibla/37.5331/126.9969');if(!Number.isFinite(result.direction)||result.direction<0||result.direction>=360)throw new Error('Invalid bearing');$('qibla-bearing').textContent=`${result.direction.toFixed(1)}°`;$('qibla-arrow').style.transform=`rotate(${result.direction}deg)`;$('qibla-arrow').style.visibility='visible';}
+    try{const result=await fetchJson('https://api.aladhan.com/v1/qibla/37.5331/126.9969');if(!Number.isFinite(result.direction)||result.direction<0||result.direction>=360)throw new Error('Invalid bearing');qiblaBearing=result.direction;$('qibla-bearing').textContent=`${result.direction.toFixed(1)}°`;if(!compassOn)setArrow(result.direction);$('qibla-arrow').style.visibility='visible';}
     catch{$('qibla-bearing').textContent='Bearing unavailable';$('retry-qibla').hidden=false;}
+  }
+  let qiblaBearing=null, compassOn=false, compassTimer=null;
+  function setArrow(degrees) { $('qibla-arrow').style.transform=`rotate(${degrees}deg)`; }
+  function onOrientation(e) {
+    const heading=headingFromEvent(e);
+    if(heading===null||!compassOn)return;
+    clearTimeout(compassTimer);
+    $('compass-status').textContent='Compass on. Approximate: phone compasses read magnetic north and drift near metal.';
+    setArrow(arrowRotation(qiblaBearing,heading+(screen.orientation?.angle||0)));
+  }
+  function stopCompass(message='') {
+    compassOn=false;clearTimeout(compassTimer);
+    window.removeEventListener('deviceorientationabsolute',onOrientation);window.removeEventListener('deviceorientation',onOrientation);
+    $('use-compass').textContent='Use compass';$('compass-status').textContent=message;
+    if(qiblaBearing!==null)setArrow(qiblaBearing);
+  }
+  const COMPASS_FAILED='Compass unavailable on this device. Use the bearing above.';
+  async function startCompass() {
+    if(qiblaBearing===null||!window.DeviceOrientationEvent){stopCompass(COMPASS_FAILED);return;}
+    if(typeof DeviceOrientationEvent.requestPermission==='function'){
+      // Chromium can also answer 'prompt'; only a denial stops here, and the timeout covers silence.
+      try{if(await DeviceOrientationEvent.requestPermission()==='denied'){stopCompass(COMPASS_FAILED);return;}}
+      catch{stopCompass(COMPASS_FAILED);return;}
+    }
+    compassOn=true;$('use-compass').textContent='Stop compass';$('compass-status').textContent='Looking for a compass reading…';
+    window.addEventListener('deviceorientationabsolute',onOrientation);window.addEventListener('deviceorientation',onOrientation);
+    compassTimer=setTimeout(()=>stopCompass(COMPASS_FAILED),4000);
   }
   async function prepareAudio() {
     if(audioReady)return audioReady;
@@ -333,6 +366,7 @@
   for(const [id,key] of [['type-filter','type'],['tier-filter','tier'],['near-filter','near']])$(id).addEventListener('change',()=>{filters[key]=key==='near'?$(id).checked:$(id).value;renderPlaces();});
   $('reset-filters').addEventListener('click',()=>{Object.assign(filters,{type:'all',tier:'all',near:false});$('type-filter').value='all';$('tier-filter').value='all';$('near-filter').checked=false;renderPlaces();});
   $('near-me').addEventListener('click',useNearMe);$('near-me-reset').addEventListener('click',resetNearMe);
+  $('use-compass').addEventListener('click',()=>{if(compassOn)stopCompass();else startCompass();});
   $('phrase-search').addEventListener('input',renderPhrases);
   $('phrase-overlay').addEventListener('click',closeOverlay);
   document.addEventListener('keydown',e=>{if($('phrase-overlay').hidden)return;if(e.key==='Escape')closeOverlay();else if(e.key==='Tab'){e.preventDefault();$('overlay-close').focus();}});

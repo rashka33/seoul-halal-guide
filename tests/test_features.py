@@ -136,3 +136,46 @@ class NearMeTests(FeatureTestCase):
         for url in requests:
             self.assertNotIn('37.5595', url)
             self.assertNotIn('126.9849', url)
+
+class RouteLinkTests(FeatureTestCase):
+    def route_links(self, page, id):
+        return page.locator(f'#place-{id} .routes a').evaluate_all('links => links.map(a => [a.textContent, a.href])')
+
+    def test_links_start_at_the_mosque_without_user_location(self):
+        page = self.open()
+        self.assertEqual(self.route_links(page, 'far'), [
+            ['Transit · Naver (live arrivals)', 'https://map.naver.com/p/directions/126.9969,37.5331,Seoul%20Central%20Mosque,,/126.985,37.559,Far%20Grill,,/-/transit'],
+            ['Walking · Naver', 'https://map.naver.com/p/directions/126.9969,37.5331,Seoul%20Central%20Mosque,,/126.985,37.559,Far%20Grill,,/-/walk'],
+            ['Transit · Google', 'https://www.google.com/maps/dir/?api=1&destination=37.559,126.985&travelmode=transit'],
+        ])
+
+    def test_links_start_at_the_user_with_near_me_and_revert_on_reset(self):
+        page = self.open(self.geo_success())
+        before = self.route_links(page, 'far')
+        page.locator('#near-me').click()
+        expect(page.locator('.you-pin')).to_have_count(1)
+        self.assertEqual(self.route_links(page, 'far'), [
+            ['Transit · Naver (live arrivals)', 'https://map.naver.com/p/directions/126.9849,37.5595,My%20location,,/126.985,37.559,Far%20Grill,,/-/transit'],
+            ['Walking · Naver', 'https://map.naver.com/p/directions/126.9849,37.5595,My%20location,,/126.985,37.559,Far%20Grill,,/-/walk'],
+            ['Transit · Google', 'https://www.google.com/maps/dir/?api=1&origin=37.5595,126.9849&destination=37.559,126.985&travelmode=transit'],
+        ])
+        page.locator('#near-me-reset').click()
+        self.assertEqual(self.route_links(page, 'far'), before)
+
+    def test_every_card_has_three_links_and_no_referrer(self):
+        page = self.open()
+        expect(page.locator('.routes a')).to_have_count(9)
+        self.assertEqual(page.locator('.routes a[rel="noopener noreferrer"]').count(), 9)
+
+    def test_station_and_time_render_only_when_present(self):
+        page = self.open(places=[place('a', 'With', 'restaurant', 37.534, 126.996, nearestStation='Itaewon Station (Line 6), Exit 3', transitTime='About 12 min by subway'), place('b', 'Without', 'restaurant', 37.535, 126.996)])
+        expect(page.locator('#place-a .facts')).to_contain_text('Nearest station: Itaewon Station (Line 6), Exit 3')
+        expect(page.locator('#place-a .facts')).to_contain_text('Typical: About 12 min by subway')
+        self.assertNotIn('Nearest station', page.locator('#place-b').inner_text())
+        self.assertNotIn('Typical:', page.locator('#place-b').inner_text())
+
+    def test_seed_data_leaves_station_and_time_empty(self):
+        page = self.open(places=None)
+        fields = page.evaluate('PLACES.map(p => [p.nearestStation, p.transitTime])')
+        self.assertTrue(fields)
+        self.assertTrue(all(field == ['', ''] for field in fields))

@@ -46,6 +46,14 @@
   function sortByUser(places, user) {
     return places.map(p=>({...p,userKm:distanceBetween(user,p.lat,p.lng)})).sort((a,b)=>a.userKm-b.userKm);
   }
+  // Web format, kept in one place because Naver does not document it publicly.
+  function naverRouteUrl(place, mode, user) {
+    const [lat,lng,name]=user?[user[0],user[1],'My location']:[MOSQUE[0],MOSQUE[1],'Seoul Central Mosque'];
+    return `https://map.naver.com/p/directions/${lng},${lat},${encodeURIComponent(name)},,/${place.lng},${place.lat},${encodeURIComponent(place.name)},,/-/${mode}`;
+  }
+  function googleRouteUrl(place, user) {
+    return `https://www.google.com/maps/dir/?api=1${user?`&origin=${user[0]},${user[1]}`:''}&destination=${place.lat},${place.lng}&travelmode=transit`;
+  }
   function prayerEpoch(date,time) {
     const match = String(time).match(/^(\d{2}):(\d{2})(?:\s|$)/);
     if (!validDate(date) || !match || +match[1]>23 || +match[2]>59) return NaN;
@@ -54,7 +62,7 @@
   function nextPrayer(days,now) {
     return days.flatMap(d=>PRAYERS.map(name=>({name,date:d.date,epoch:prayerEpoch(d.date,d.timings[name])}))).filter(p=>p.epoch>now).sort((a,b)=>a.epoch-b.epoch)[0] || null;
   }
-  window.GuideCore = {seoulDate,validDate,shiftDate,annotatePlaces,filterPlaces,sortByUser,prayerEpoch,nextPrayer};
+  window.GuideCore = {seoulDate,validDate,shiftDate,annotatePlaces,filterPlaces,sortByUser,naverRouteUrl,googleRouteUrl,prayerEpoch,nextPrayer};
   if (!document.querySelector('#prayer-grid')) return;
 
   const $ = id => document.getElementById(id);
@@ -104,13 +112,17 @@
     const facts=el('div','facts');const yn=v=>v===true?'Yes':v===false?'No':'Not recorded';
     facts.append(fact('Prayer space',yn(p.prayerSpace)),fact('Alcohol served',yn(p.alcoholServed)),fact('Hours',p.hours||'Confirm before visiting'),fact('Price',p.priceLevel>=1&&p.priceLevel<=3?'₩'.repeat(p.priceLevel):'Not recorded'),fact('Certifier',p.certifier||'None recorded'));
     if(p.effectiveTier==='certified_seen')facts.append(fact('Certificate expiry',p.certificateExpiry));
+    if(p.nearestStation)facts.append(fact('Nearest station',p.nearestStation));
+    if(p.transitTime)facts.append(el('p','',`Typical: ${p.transitTime}`));
     const sources=el('details','sources');sources.append(el('summary','',`Sources (${p.sources.length})`));const list=el('ul');
     for(const url of p.sources){const li=el('li');li.append(link(new URL(url).hostname,url));list.append(li);}sources.append(list);
     const directions=el('nav','directions');directions.setAttribute('aria-label',`Directions to ${p.name}`);
     if(safeUrl(p.naverUrl))directions.append(link('Naver Map',p.naverUrl));if(safeUrl(p.googleUrl))directions.append(link('Google Maps',p.googleUrl));
     article.append(meta,title,address,badge,basis,facts);
     if(p.notes && p.type!=='mosque')article.append(el('p','card-notes',p.notes));
-    article.append(sources,directions);return article;
+    const routes=el('nav','routes');routes.setAttribute('aria-label',`Routes to ${p.name}`);
+    routes.append(link('Transit · Naver (live arrivals)',naverRouteUrl(p,'transit',userLoc)),link('Walking · Naver',naverRouteUrl(p,'walk',userLoc)),link('Transit · Google',googleRouteUrl(p,userLoc)));
+    article.append(sources,routes,directions);return article;
   }
   function renderPlaces() {
     visible=filterPlaces(records,filters);

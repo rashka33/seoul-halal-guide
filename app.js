@@ -7,8 +7,8 @@
   const PRAYERS = NAMES.filter(n => n !== 'Sunrise');
   const METHODS = ['3', '2', '4', '13', '17', '20'];
   const TIERS = {certified_seen:'Certificate seen', cross_checked:'Cross-checked', self_declared:'Self-declared', unverified:'Unverified'};
-  const TYPES = {mosque:'Mosque', restaurant:'Restaurant', grocery:'Grocery', prayer_room:'Prayer room'};
-  const COLORS = {mosque:'#123e32', restaurant:'#bf5a29', grocery:'#316cad', prayer_room:'#8055a0'};
+  const TYPES = {mosque:'Mosque', restaurant:'Restaurant', grocery:'Grocery', prayer_room:'Prayer room',cafe:'Café'};
+  const COLORS = {mosque:'#123e32', restaurant:'#bf5a29', grocery:'#316cad', prayer_room:'#8055a0',cafe:'#0f7f85'};
   const seoulFormat = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'});
   function seoulDate(now = new Date()) {
     const parts = Object.fromEntries(seoulFormat.formatToParts(now).map(p => [p.type,p.value]));
@@ -112,6 +112,8 @@
     const facts=el('div','facts');const yn=v=>v===true?'Yes':v===false?'No':'Not recorded';
     facts.append(fact('Prayer space',yn(p.prayerSpace)),fact('Alcohol served',yn(p.alcoholServed)),fact('Hours',p.hours||'Confirm before visiting'),fact('Price',p.priceLevel>=1&&p.priceLevel<=3?'₩'.repeat(p.priceLevel):'Not recorded'),fact('Certifier',p.certifier||'None recorded'));
     if(p.effectiveTier==='certified_seen')facts.append(fact('Certificate expiry',p.certificateExpiry));
+    if(p.type==='cafe')facts.append(fact('Free WiFi',yn(p.wifi)));
+    if(p.vegetarianOptions)facts.append(fact('Vegetarian options',p.vegetarianOptions));
     if(p.nearestStation)facts.append(fact('Nearest station',p.nearestStation));
     if(p.transitTime)facts.append(el('p','',`Typical: ${p.transitTime}`));
     const sources=el('details','sources');sources.append(el('summary','',`Sources (${p.sources.length})`));const list=el('ul');

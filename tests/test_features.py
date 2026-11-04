@@ -179,3 +179,51 @@ class RouteLinkTests(FeatureTestCase):
         fields = page.evaluate('PLACES.map(p => [p.nearestStation, p.transitTime])')
         self.assertTrue(fields)
         self.assertTrue(all(field == ['', ''] for field in fields))
+
+class CafeTests(FeatureTestCase):
+    CAFES = FIXTURE + [
+        place('cafe-yes', 'Open Cafe', 'cafe', 37.5335, 126.9965, wifi=True, vegetarianOptions='Fully vegan menu', halalBasis='Café listing, not a halal claim.'),
+        place('cafe-unknown', 'Quiet Cafe', 'cafe', 37.5336, 126.9966, wifi=None),
+        place('cafe-no', 'Busy Cafe', 'cafe', 37.5337, 126.9967, wifi=False),
+    ]
+
+    def test_type_filter_shows_only_cafes(self):
+        page = self.open(places=self.CAFES)
+        expect(page.locator('.place-card')).to_have_count(6)
+        page.locator('#type-filter').select_option('cafe')
+        self.assertEqual(set(self.card_ids(page)), {'cafe-yes', 'cafe-unknown', 'cafe-no'})
+        expect(page.locator('.card-meta span:first-child').first).to_have_text('Café')
+
+    def test_legend_lists_cafe(self):
+        page = self.open()
+        expect(page.locator('.map-legend')).to_contain_text('Café')
+
+    def test_wifi_line_only_on_cafes(self):
+        page = self.open(places=self.CAFES)
+        expect(page.locator('#place-cafe-yes .facts')).to_contain_text('Free WiFi: Yes')
+        expect(page.locator('#place-cafe-no .facts')).to_contain_text('Free WiFi: No')
+        expect(page.locator('#place-cafe-unknown .facts')).to_contain_text('Free WiFi: Not recorded')
+        self.assertNotIn('Free WiFi', page.locator('#place-near').inner_text())
+
+    def test_vegetarian_is_its_own_line_never_in_the_basis(self):
+        page = self.open(places=self.CAFES)
+        expect(page.locator('#place-cafe-yes .facts')).to_contain_text('Vegetarian options: Fully vegan menu')
+        self.assertNotIn('egetarian', page.locator('#place-cafe-yes .check-basis').inner_text())
+        self.assertNotIn('Vegetarian options', page.locator('#place-cafe-unknown').inner_text())
+
+    def test_stale_cafe_stays_hidden(self):
+        page = self.open(places=[place('old', 'Old Cafe', 'cafe', 37.5335, 126.9965, lastChecked=''), place('near', 'Near Grill', 'restaurant', 37.534, 126.996)])
+        self.assertEqual(self.card_ids(page), ['near'])
+
+    def test_seed_cafes_match_the_brief_and_stay_hidden(self):
+        page = self.open(places=None)
+        seeds = {c['id']: c for c in page.evaluate("PLACES.filter(p => p.type === 'cafe')")}
+        self.assertEqual({k: (v['wifi'], v['alcoholServed']) for k, v in seeds.items()}, {
+            'baraka-cafe': (None, False), 'plant': (True, True), 'downt-espresso': (True, None), 'coffee-lab': (True, True)})
+        for seed in seeds.values():
+            self.assertEqual((seed['tier'], seed['lastChecked']), ('unverified', ''))
+            self.assertGreaterEqual(len(seed['sources']), 2)
+        self.assertEqual(seeds['plant']['vegetarianOptions'], 'Fully vegan menu')
+        for id in ('plant', 'downt-espresso', 'coffee-lab'):
+            self.assertIn('foreigner-visitor reviews', seeds[id]['halalBasis'])
+        self.assertEqual(page.locator('.place-card[id*="cafe"]').count(), 0)

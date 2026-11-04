@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="styles.css">
   <script defer src="assets/vendor/leaflet/leaflet.js"></script>
   <script defer src="data/places.js"></script>
+  <script defer src="data/phrases.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
@@ -41,9 +42,16 @@
     <p id="result-count" class="result-count" role="status"></p>
     <div class="explore-layout"><div class="map-column"><div id="map" aria-label="Map of currently shown places near Seoul Central Mosque"></div><p id="map-status" class="small" role="status"></p><ul class="map-legend" aria-label="Map key"><li><i class="dot mosque" aria-hidden="true"></i>Mosque</li><li><i class="dot restaurant" aria-hidden="true"></i>Restaurant</li><li><i class="dot grocery" aria-hidden="true"></i>Grocery</li><li><i class="dot prayer_room" aria-hidden="true"></i>Prayer room</li><li><i class="dot cafe" aria-hidden="true"></i>Café</li></ul><p class="map-footnote">Distances are straight-line estimates, measured from the mosque unless you use Near me. Walking minutes assume 5 km/h; hills and routes take longer. Use Naver for walking directions.</p></div><div><div id="listings" class="listings"></div><div id="empty-state" class="empty-state" hidden><h3>No current places match</h3><p>Try another filter. Places awaiting a desk check stay hidden until their information is checked.</p><button id="reset-filters" type="button">Reset filters</button></div><div class="pending-note"><strong id="pending-count"></strong><p>Unchecked or older than 90 days? Hidden until re-checked. We’ll grow this guide one careful listing at a time.</p></div></div></div>
   </section>
+  <section id="useful-korean" class="useful-korean" aria-labelledby="korean-heading">
+    <div class="section-heading"><div><h2 id="korean-heading">Useful Korean</h2><p>Tap a phrase to show it large to a local.</p></div></div>
+    <div class="phrase-controls"><div id="phrase-chips" class="phrase-chips" role="group" aria-label="Phrase category"></div><label for="phrase-search">Search English or romanization<input id="phrase-search" type="search" name="phrase-search" autocomplete="off"></label></div>
+    <p id="phrase-count" class="result-count" role="status"></p>
+    <div id="phrase-list" class="phrase-list"></div>
+  </section>
   <section id="trust" class="trust" aria-labelledby="trust-heading"><div><h2 id="trust-heading">A claim you can trace.</h2><p>Read the basis, open the sources, check the date. A badge describes the evidence we found.</p></div><dl><div><dt><span class="badge certified_seen">Certificate seen</span></dt><dd>Certificate found online, with a future expiry.</dd></div><div><dt><span class="badge cross_checked">Cross-checked</span></dt><dd>Two or more independent, recent sources agree.</dd></div><div><dt><span class="badge self_declared">Self-declared</span></dt><dd>The business itself claims halal.</dd></div><div><dt><span class="badge unverified">Unverified</span></dt><dd>Insufficient evidence for a higher tier.</dd></div></dl></section>
 </main>
 <footer class="wrap"><strong>Seoul Halal Guide</strong><p>Halal information is desk research from public sources, not an inspection or a religious ruling. Certification and opening status change — confirm before you go.</p><p class="footer-credit">Prayer calculations by <a href="https://aladhan.com/prayer-times-api">AlAdhan</a>. A free, independent neighborhood guide.</p></footer>
+<div id="phrase-overlay" class="phrase-overlay" role="dialog" aria-modal="true" aria-labelledby="overlay-ko" hidden><button id="overlay-close" class="overlay-close" type="button" aria-label="Close">✕</button><p id="overlay-ko" class="overlay-ko" lang="ko"></p><p id="overlay-en" class="overlay-en"></p></div>
 <noscript><p class="wrap">Enable JavaScript to load prayer times, the map, and date-checked listings.</p></noscript>
 </body>
 </html>

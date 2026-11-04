@@ -8,6 +8,7 @@
   const METHODS = ['3', '2', '4', '13', '17', '20'];
   const TIERS = {certified_seen:'Certificate seen', cross_checked:'Cross-checked', self_declared:'Self-declared', unverified:'Unverified'};
   const TYPES = {mosque:'Mosque', restaurant:'Restaurant', grocery:'Grocery', prayer_room:'Prayer room',cafe:'Café'};
+  const PHRASE_CATEGORIES = {all:'All',greetings:'Greetings & courtesy',food_halal:'Food & halal',vegetarian:'Vegetarian requests',directions:'Directions & transport',money:'Money & shopping',prayer:'Prayer & mosque',emergency:'Emergencies & help',numbers:'Numbers',labels:'Label-spotting words'};
   const COLORS = {mosque:'#123e32', restaurant:'#bf5a29', grocery:'#316cad', prayer_room:'#8055a0',cafe:'#0f7f85'};
   const seoulFormat = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'});
   function seoulDate(now = new Date()) {
@@ -54,6 +55,10 @@
   function googleRouteUrl(place, user) {
     return `https://www.google.com/maps/dir/?api=1${user?`&origin=${user[0]},${user[1]}`:''}&destination=${place.lat},${place.lng}&travelmode=transit`;
   }
+  function matchPhrases(phrases, category, query) {
+    const q=query.trim().toLowerCase();
+    return phrases.filter(p=>(category==='all'||p.category===category)&&(!q||p.en.toLowerCase().includes(q)||p.romanization.toLowerCase().includes(q)));
+  }
   function prayerEpoch(date,time) {
     const match = String(time).match(/^(\d{2}):(\d{2})(?:\s|$)/);
     if (!validDate(date) || !match || +match[1]>23 || +match[2]>59) return NaN;
@@ -62,7 +67,7 @@
   function nextPrayer(days,now) {
     return days.flatMap(d=>PRAYERS.map(name=>({name,date:d.date,epoch:prayerEpoch(d.date,d.timings[name])}))).filter(p=>p.epoch>now).sort((a,b)=>a.epoch-b.epoch)[0] || null;
   }
-  window.GuideCore = {seoulDate,validDate,shiftDate,annotatePlaces,filterPlaces,sortByUser,naverRouteUrl,googleRouteUrl,prayerEpoch,nextPrayer};
+  window.GuideCore = {seoulDate,validDate,shiftDate,annotatePlaces,filterPlaces,sortByUser,naverRouteUrl,googleRouteUrl,matchPhrases,prayerEpoch,nextPrayer};
   if (!document.querySelector('#prayer-grid')) return;
 
   const $ = id => document.getElementById(id);
@@ -200,6 +205,33 @@
     if(map)map.setView(MOSQUE,16);
     renderPlaces();$('near-me').focus();
   }
+  let phraseCategory='all', overlayOpener=null;
+  function renderPhraseChips() {
+    $('phrase-chips').replaceChildren(...Object.entries(PHRASE_CATEGORIES).map(([key,label])=>{
+      const chip=el('button','phrase-chip',label);chip.type='button';chip.setAttribute('aria-pressed',String(key===phraseCategory));
+      chip.addEventListener('click',()=>{phraseCategory=key;renderPhraseChips();renderPhrases();$('phrase-chips').querySelector('[aria-pressed="true"]').focus();});
+      return chip;
+    }));
+  }
+  function renderPhrases() {
+    const shown=matchPhrases(window.PHRASES||[],phraseCategory,$('phrase-search').value);
+    $('phrase-list').replaceChildren(...shown.map(p=>{
+      const row=el('button','phrase-row');row.type='button';
+      const ko=el('span','phrase-ko',p.ko);ko.lang='ko';
+      row.append(el('span','phrase-en',p.en),ko,el('span','phrase-rom',p.romanization));
+      row.addEventListener('click',()=>openOverlay(p,row));
+      return row;
+    }));
+    $('phrase-count').textContent=`${shown.length} ${shown.length===1?'phrase':'phrases'}`;
+  }
+  function openOverlay(phrase,opener) {
+    overlayOpener=opener;$('overlay-ko').textContent=phrase.ko;$('overlay-en').textContent=phrase.en;
+    $('phrase-overlay').hidden=false;document.body.classList.add('overlay-open');$('overlay-close').focus();
+  }
+  function closeOverlay() {
+    $('phrase-overlay').hidden=true;document.body.classList.remove('overlay-open');
+    if(overlayOpener?.isConnected)overlayOpener.focus();overlayOpener=null;
+  }
   function renderPrayers() {
     const d=days.find(d=>d.date===today);
     $('prayer-grid').replaceChildren(...NAMES.map(name=>{const row=el('div','prayer-time');row.dataset.prayer=name;row.append(el('span','name',name));const time=el('time','',d?d.timings[name].slice(0,5):'—:—');if(d)time.dateTime=`${today}T${d.timings[name].slice(0,5)}:00+09:00`;row.append(time,el('span','next-label',''));return row;}));
@@ -301,7 +333,11 @@
   for(const [id,key] of [['type-filter','type'],['tier-filter','tier'],['near-filter','near']])$(id).addEventListener('change',()=>{filters[key]=key==='near'?$(id).checked:$(id).value;renderPlaces();});
   $('reset-filters').addEventListener('click',()=>{Object.assign(filters,{type:'all',tier:'all',near:false});$('type-filter').value='all';$('tier-filter').value='all';$('near-filter').checked=false;renderPlaces();});
   $('near-me').addEventListener('click',useNearMe);$('near-me-reset').addEventListener('click',resetNearMe);
+  $('phrase-search').addEventListener('input',renderPhrases);
+  $('phrase-overlay').addEventListener('click',closeOverlay);
+  document.addEventListener('keydown',e=>{if($('phrase-overlay').hidden)return;if(e.key==='Escape')closeOverlay();else if(e.key==='Tab'){e.preventDefault();$('overlay-close').focus();}});
   document.addEventListener('visibilitychange',()=>{lastTick=Date.now();if(document.visibilityState==='visible'){tick();if(!days.length&&!loading)loadPrayers();}});
   window.addEventListener('online',()=>{loadPrayers();loadQibla();});
-  updateDates();refreshRecords();initMap();loadPrayers();loadQibla();setInterval(tick,1000);
+  updateDates();refreshRecords();initMap();renderPhraseChips();renderPhrases();loadPrayers();loadQibla();setInterval(tick,1000);
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();

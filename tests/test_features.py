@@ -1,8 +1,10 @@
 """Feature tests against the real page, with geolocation and third-party network doubled."""
 import datetime
 import functools
+import hashlib
 import http.server
 import json
+import re
 import threading
 import unittest
 from pathlib import Path
@@ -227,3 +229,101 @@ class CafeTests(FeatureTestCase):
         for id in ('plant', 'downt-espresso', 'coffee-lab'):
             self.assertIn('foreigner-visitor reviews', seeds[id]['halalBasis'])
         self.assertEqual(page.locator('.place-card[id*="cafe"]').count(), 0)
+
+class PhraseTests(FeatureTestCase):
+    def test_all_phrases_render_with_all_three_lines(self):
+        page = self.open()
+        expect(page.locator('.phrase-row')).to_have_count(100)
+        expect(page.locator('#phrase-count')).to_have_text('100 phrases')
+        first = page.locator('.phrase-row').first
+        expect(first.locator('.phrase-en')).to_have_text('Hello')
+        expect(first.locator('.phrase-ko')).to_have_text('안녕하세요')
+        expect(first.locator('.phrase-rom')).to_have_text('annyeonghaseyo')
+
+    def test_category_chips_use_human_labels_and_filter(self):
+        page = self.open()
+        self.assertEqual(page.locator('.phrase-chip').all_inner_texts(), ['All', 'Greetings & courtesy', 'Food & halal', 'Vegetarian requests', 'Directions & transport', 'Money & shopping', 'Prayer & mosque', 'Emergencies & help', 'Numbers', 'Label-spotting words'])
+        counts = {'Greetings & courtesy': 12, 'Food & halal': 16, 'Vegetarian requests': 6, 'Directions & transport': 14, 'Money & shopping': 10, 'Prayer & mosque': 10, 'Emergencies & help': 10, 'Numbers': 12, 'Label-spotting words': 10, 'All': 100}
+        for label, count in counts.items():
+            page.get_by_role('button', name=label, exact=True).click()
+            expect(page.locator('.phrase-row')).to_have_count(count)
+            expect(page.get_by_role('button', name=label, exact=True)).to_have_attribute('aria-pressed', 'true')
+
+    def test_search_covers_english_and_romanization_within_category(self):
+        page = self.open()
+        page.locator('#phrase-search').fill('POLICE')
+        expect(page.locator('.phrase-row')).to_have_count(1)
+        page.locator('#phrase-search').fill('gamsahamnida')
+        expect(page.locator('.phrase-row')).to_have_count(3)
+        page.get_by_role('button', name='Greetings & courtesy', exact=True).click()
+        expect(page.locator('.phrase-row')).to_have_count(2)
+        page.locator('#phrase-search').fill('zzzz')
+        expect(page.locator('#phrase-count')).to_have_text('0 phrases')
+
+    def open_overlay(self, page):
+        page.locator('.phrase-row').first.click()
+        expect(page.locator('#phrase-overlay')).to_be_visible()
+
+    def test_overlay_is_full_screen_with_very_large_hangul(self):
+        page = self.open()
+        self.open_overlay(page)
+        expect(page.locator('#overlay-ko')).to_have_text('안녕하세요')
+        expect(page.locator('#overlay-en')).to_have_text('Hello')
+        box = page.locator('#phrase-overlay').bounding_box()
+        self.assertEqual((box['width'], box['height']), (page.viewport_size['width'], page.viewport_size['height']))
+        size = page.locator('#overlay-ko').evaluate('n => parseFloat(getComputedStyle(n).fontSize)')
+        english = page.locator('#overlay-en').evaluate('n => parseFloat(getComputedStyle(n).fontSize)')
+        self.assertGreaterEqual(size, 56)
+        self.assertGreater(size, english * 3)
+
+    def test_overlay_closes_by_tap_anywhere_close_button_and_escape(self):
+        page = self.open()
+        self.open_overlay(page)
+        page.locator('#overlay-ko').click()
+        expect(page.locator('#phrase-overlay')).to_be_hidden()
+        self.open_overlay(page)
+        page.locator('#overlay-close').click()
+        expect(page.locator('#phrase-overlay')).to_be_hidden()
+        self.open_overlay(page)
+        page.keyboard.press('Escape')
+        expect(page.locator('#phrase-overlay')).to_be_hidden()
+        self.assertEqual(page.evaluate('document.activeElement.className'), 'phrase-row')
+
+    def test_longest_phrase_fits_a_small_phone_without_side_scroll(self):
+        page = self.open()
+        page.set_viewport_size({'width': 320, 'height': 568})
+        page.locator('#phrase-search').fill('kindness')
+        self.open_overlay(page)
+        self.assertLessEqual(page.locator('#phrase-overlay').evaluate('n => n.scrollWidth'), 320)
+
+    def test_phrases_and_page_work_offline_from_cache(self):
+        page = self.open(places=None, service_workers='allow')
+        page.evaluate('navigator.serviceWorker.ready.then(() => true)')
+        page.context.set_offline(True)
+        page.reload()
+        expect(page.locator('.phrase-row')).to_have_count(100)
+        self.open_overlay(page)
+        expect(page.locator('#overlay-ko')).to_have_text('안녕하세요')
+
+class IntegrityTests(unittest.TestCase):
+    SITE = ['index.html', 'app.js', 'styles.css', 'sw.js', 'data/places.js', 'data/phrases.js', 'README.md', 'DESK_CHECK.md', 'docs/DESIGN.md']
+
+    def test_no_banned_wording(self):
+        for name in self.SITE:
+            self.assertNotIn('verified halal', (ROOT / name).read_text().lower(), name)
+
+    def test_only_the_two_approved_commas_differ_from_the_supplied_phrases(self):
+        data = (ROOT / 'data/phrases.js').read_bytes()
+        for tail in ('category:"vegetarian"},\n  {en:"Where is Itaewon'.encode(), 'category:"prayer"},\n  {en:"Help!"'.encode()):
+            self.assertEqual(data.count(tail), 1)
+            data = data.replace(tail, tail.replace(b'},', b'}'))
+        self.assertEqual(hashlib.sha256(data).hexdigest(), 'd0a945f4226f0296cd0e5f9cbce94f01403383cb68b6ee0291bca0ae1f440bdd')
+
+    def test_every_seed_is_unverified_with_no_check_date(self):
+        text = (ROOT / 'data/places.js').read_text()
+        records = re.findall(r"^  \{id:'([^']+)'.*$", text, re.M)
+        lines = [line for line in text.splitlines() if line.startswith("  {id:'")]
+        self.assertEqual(len(records), 14)
+        for line in lines:
+            self.assertIn("lastChecked:''", line)
+            self.assertIn("tier:'unverified'", line)

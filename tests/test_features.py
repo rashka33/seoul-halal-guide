@@ -169,6 +169,11 @@ class RouteLinkTests(FeatureTestCase):
         expect(page.locator('.routes a')).to_have_count(9)
         self.assertEqual(page.locator('.routes a[rel="noopener noreferrer"]').count(), 9)
 
+    def test_every_card_discloses_what_a_route_link_shares(self):
+        page = self.open()
+        expect(page.locator('.routes + .route-note')).to_have_count(3)
+        expect(page.locator('.route-note').first).to_have_text('Tapping a route link opens Naver Maps and shares your location with Naver.')
+
     def test_station_and_time_render_only_when_present(self):
         page = self.open(places=[place('a', 'With', 'restaurant', 37.534, 126.996, nearestStation='Itaewon Station (Line 6), Exit 3', transitTime='About 12 min by subway'), place('b', 'Without', 'restaurant', 37.535, 126.996)])
         expect(page.locator('#place-a .facts')).to_contain_text('Nearest station: Itaewon Station (Line 6), Exit 3')
@@ -228,6 +233,9 @@ class CafeTests(FeatureTestCase):
         self.assertEqual(seeds['plant']['vegetarianOptions'], 'Fully vegan menu')
         for id in ('plant', 'downt-espresso', 'coffee-lab'):
             self.assertIn('foreigner-visitor reviews', seeds[id]['halalBasis'])
+        for seed in seeds.values():
+            self.assertIn('not a halal claim', seed['halalBasis'])
+            self.assertIn('Evidence type:', seed['halalBasis'])
         self.assertEqual(page.locator('.place-card[id*="cafe"]').count(), 0)
 
 class PhraseTests(FeatureTestCase):
@@ -365,8 +373,11 @@ class IntegrityTests(unittest.TestCase):
         for name in self.SITE:
             self.assertNotIn('verified' + ' halal', (ROOT / name).read_text().lower(), name)
 
-    def test_only_the_two_approved_commas_differ_from_the_supplied_phrases(self):
+    def test_only_approved_edits_differ_from_the_supplied_phrases(self):
         data = (ROOT / 'data/phrases.js').read_bytes()
+        fixed = 'romanization:"yeogiseo sewojuseyo"'.encode()
+        self.assertEqual(data.count(fixed), 1)
+        data = data.replace(fixed, 'romanization:"yeogiseo sewojuseoyo"'.encode())
         for tail in ('category:"vegetarian"},\n  {en:"Where is Itaewon'.encode(), 'category:"prayer"},\n  {en:"Help!"'.encode()):
             self.assertEqual(data.count(tail), 1)
             data = data.replace(tail, tail.replace(b'},', b'}'))

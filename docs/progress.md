@@ -16,3 +16,4 @@ Ruling: supplied data/phrases.js did not parse (missing commas after lines 43 an
 Ruling: map.naver.com is blocked in the built-in browser and Claude in Chrome was not connected, so the Naver web directions format is NOT yet demonstrated to open a routed page. Needs a tap test.
 Open question for owner: Near me re-centering requests OSM tiles for the user's area, which reveals that area to OSM. Required by the brief; disclosed on the page.
 Café coordinates come from OSM Nominatim lookups of the published addresses. Plant resolved to street level only.
+Owner-requested edits (2026-11-06): route-link disclosure line added verbatim; Baraka Cafe basis reworded so the card makes no halal claim; line 47 romanization corrected to sewojuseyo with the Hangul unchanged.

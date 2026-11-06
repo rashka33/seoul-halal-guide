@@ -44,7 +44,7 @@ window.PHRASES = [
   {en:"Where is Itaewon Station?", ko:"이태원역이 어디예요?", romanization:"itaewonnyeoki eodiyeyo?", category:"directions"},
   {en:"Please take me to this address", ko:"이 주소로 가주세요", romanization:"i jusoro gajuseyo", category:"directions"},
   {en:"Seoul Central Mosque, please", ko:"서울중앙성원으로 가주세요", romanization:"seoul jungang seongwoneuro gajuseyo", category:"directions"},
-  {en:"Please stop here", ko:"여기서 세워주세요", romanization:"yeogiseo sewojuseoyo", category:"directions"},
+  {en:"Please stop here", ko:"여기서 세워주세요", romanization:"yeogiseo sewojuseyo", category:"directions"},
   {en:"How long does it take?", ko:"얼마나 걸려요?", romanization:"eolmana geollyeoyo?", category:"directions"},
   {en:"How far is it?", ko:"얼마나 멀어요?", romanization:"eolmana meoreoyo?", category:"directions"},
   {en:"Turn left, please", ko:"왼쪽으로 가주세요", romanization:"oenjjogeuro gajuseyo", category:"directions"},

@@ -37,13 +37,17 @@ Edit the mosque record’s `notes` to update the visible Friday note immediately
 
 ## Near me and route links
 
-Near me asks for location only after a tap. The position stays in page memory: it is never written to storage or sent by this site's code. Two things do follow from using it, both visible on the page: re-centering makes the browser fetch OpenStreetMap tiles for that area, and a route link passes the position to Naver or Google if the user taps that link. “Back to mosque order” clears it. The 1.1 km filter always measures from the mosque.
+Near me asks for location only after a tap. The position stays in page memory: it is never written to storage or sent by this site's code. Two things do follow from using it, both visible on the page: re-centering makes the browser fetch OpenStreetMap tiles for that area, and a route link passes the position to Naver or Google if the user taps that link. “Mosque order” clears it. The 1.1 km filter always measures from the mosque.
 
-Route links are deep links. Naver starts from the user's position under Near me, otherwise from Seoul Central Mosque. Google omits `origin` unless Near me is active. Arrival times appear only on Naver after the tap; this site never computes them. Naver does not publicly document its web directions format, so `naverRouteUrl` in `app.js` is the one place to change it.
+Route links are deep links, under the Directions button on each card. The mosque's own card shows them only while Near me is on, since a route from the mosque to itself helps nobody. Naver starts from the user's position under Near me, otherwise from Seoul Central Mosque. Google omits `origin` unless Near me is active. Arrival times appear only on Naver after the tap; this site never computes them. Naver does not publicly document its web directions format, so `naverRouteUrl` in `app.js` is the one place to change it.
 
 ## Useful Korean
 
 `data/phrases.js` is supplied content: do not alter the Korean or romanization. Search covers English and romanization. Tapping a row shows the Hangul full screen to show to a local.
+
+## App features
+
+On phones, a bottom menu jumps between Prayer, Places and Korean. `manifest.webmanifest` and `assets/icons/` make the site installable: Android and desktop Chromium show an Install app button in the footer, and iPhones show Add to Home Screen instructions. Dark mode follows the device setting, with no toggle. Saved phrases stay in this browser's localStorage. Listen uses the device's own speech voice, so quality varies, and the page says so if there is no Korean voice.
 
 ## Prayer times and audio
 
@@ -64,7 +68,7 @@ Keep Leaflet’s license and the visible **© OpenStreetMap contributors** attri
 
 ## Development checks
 
-The site itself has no Python or Playwright dependency. Optional domain checks: install Playwright in a temporary Python environment, run `python -m playwright install chromium --only-shell`, then run `python -m unittest discover -s tests -v`. Tests execute the real JavaScript in Playwright’s headless Chromium. Regression tests start and stop a temporary local static server and cover map-pin keyboard/touch targets and recovery from blocked audio playback. Domain tests cover Seoul midnight, strict freshness, tier safeguards, distance filtering and next-day prayer selection. Feature tests cover Near me (mocked geolocation), route links, cafés, phrases, the overlay, offline reload, the compass, real adhan playback and data integrity. Browser acceptance checks should also cover live API loading, countdown, method/school persistence, stale fixtures, map/card agreement, missing audio, offline behavior, mobile overflow, keyboard access and attribution.
+The site itself has no Python or Playwright dependency. Optional domain checks: install Playwright in a temporary Python environment, run `python -m playwright install chromium --only-shell`, then run `python -m unittest discover -s tests -v`. Tests execute the real JavaScript in Playwright’s headless Chromium. Regression tests start and stop a temporary local static server and cover map-pin keyboard/touch targets and recovery from blocked audio playback. Domain tests cover Seoul midnight, strict freshness, tier safeguards, distance filtering and next-day prayer selection. Feature tests cover Near me (mocked geolocation), route links, cafés, phrases, the overlay, offline reload, the compass, real adhan playback, the bottom menu, cards, install files, dark mode, saved phrases, Listen, empty states and data integrity. Browser acceptance checks should also cover live API loading, countdown, method/school persistence, stale fixtures, map/card agreement, missing audio, offline behavior, mobile overflow, keyboard access and attribution.
 
 ## Public sources
 

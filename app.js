@@ -8,7 +8,8 @@
   const METHODS = ['3', '2', '4', '13', '17', '20'];
   const TIERS = {certified_seen:'Certificate seen', cross_checked:'Cross-checked', self_declared:'Self-declared', unverified:'Unverified'};
   const TYPES = {mosque:'Mosque', restaurant:'Restaurant', grocery:'Grocery', prayer_room:'Prayer room',cafe:'Café'};
-  const PHRASE_CATEGORIES = {all:'All',greetings:'Greetings & courtesy',food_halal:'Food & halal',vegetarian:'Vegetarian requests',directions:'Directions & transport',money:'Money & shopping',prayer:'Prayer & mosque',emergency:'Emergencies & help',numbers:'Numbers',labels:'Label-spotting words'};
+  const PHRASE_CATEGORIES = {all:'All',saved:'Saved',greetings:'Greetings & courtesy',food_halal:'Food & halal',vegetarian:'Vegetarian requests',directions:'Directions & transport',money:'Money & shopping',prayer:'Prayer & mosque',emergency:'Emergencies & help',numbers:'Numbers',labels:'Label-spotting words'};
+  const PLURALS = {mosque:['mosque','mosques'],restaurant:['restaurant','restaurants'],grocery:['grocery','groceries'],prayer_room:['prayer room','prayer rooms'],cafe:['café','cafés']};
   const COLORS = {mosque:'#123e32', restaurant:'#bf5a29', grocery:'#316cad', prayer_room:'#8055a0',cafe:'#0f7f85'};
   const seoulFormat = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'});
   function seoulDate(now = new Date()) {
@@ -108,40 +109,68 @@
     for(const p of window.PLACES||[])p.stale=records.find(r=>r.id===p.id)?.stale ?? true;
     const mosque=records.find(p=>p.id==='seoul-central-mosque');
     $('mosque-note-text').textContent=mosque?.notes||'Please confirm Friday arrangements with the mosque.';
-    $('pending-count').textContent=`${records.filter(p=>p.stale).length} places pending check`;
+    renderPending();
     renderPlaces();
+  }
+  function countLabel(type,n) { return `${n} ${PLURALS[type]?.[n===1?0:1]||'places'}`; }
+  function renderPending() {
+    const pending=records.filter(p=>p.stale), types=Object.keys(PLURALS).filter(type=>pending.some(p=>p.type===type));
+    const parts=types.map(type=>countLabel(type,pending.filter(p=>p.type===type).length));
+    $('pending-note').hidden=!pending.length;
+    $('pending-count').textContent=`${pending.length} more ${pending.length===1?'place is':'places are'} waiting for a check`;
+    $('pending-detail').textContent=`${parts.length>1?`${parts.slice(0,-1).join(', ')} and ${parts.at(-1)}`:parts[0]||''}. Each one appears here after a person reviews its sources. Anything not re-checked within 90 days is hidden again.`;
+  }
+  function renderEmpty() {
+    const waiting=records.filter(p=>p.stale&&p.type===filters.type).length, none=!records.some(p=>!p.stale&&p.type===filters.type);
+    if(filters.type!=='all'&&none&&waiting){
+      $('empty-title').textContent=`No ${PLURALS[filters.type][1]} checked yet`;
+      $('empty-text').textContent=`${countLabel(filters.type,waiting)} waiting for a check. Each one appears here after a person reviews its sources.`;
+    }else{
+      $('empty-title').textContent='No places match these filters';
+      $('empty-text').textContent='Try another filter, or show all places.';
+    }
   }
   function link(text,url,cls) { const a=el('a',cls,text); a.href=safeUrl(url)||'#'; if(safeUrl(url)){a.target='_blank';a.rel='noopener noreferrer';} return a; }
   function fact(label,value) { return el('p','',`${label}: ${value}`); }
   function card(p) {
     const article=el('article','place-card');article.id=`place-${p.id}`;article.tabIndex=-1;
-    const meta=el('div','card-meta');meta.append(el('span','',TYPES[p.type]||'Place'),el('span','distance',userLoc?`${p.userKm.toFixed(2)} km from you`:`${p.distanceKm.toFixed(2)} km · ~${Math.round(p.distanceKm/5*60)} min walk`));
+    const meta=el('div','card-meta');meta.append(el('span','',TYPES[p.type]||'Place'),el('span','distance',userLoc?`${p.userKm.toFixed(2)} km from you`:p.type==='mosque'&&p.distanceKm<.01?'Distances start here':`${p.distanceKm.toFixed(2)} km · ~${Math.round(p.distanceKm/5*60)} min walk`));
     const title=el('h3','',p.name),address=el('p','address',p.address);
     const badge=el('span',`badge ${p.effectiveTier}`,TIERS[p.effectiveTier]);
     const basis=el('div','check-basis');basis.append(el('strong','',`Checked on ${p.lastChecked} — ${TIERS[p.effectiveTier].toLowerCase()}`),el('p','',p.halalBasis||'No basis recorded.'));
     if(p.effectiveTier!==p.tier)basis.append(el('p','','Evidence no longer supports the recorded tier; shown conservatively.'));
-    const facts=el('div','facts');const yn=v=>v===true?'Yes':v===false?'No':'Not recorded';
-    facts.append(fact('Prayer space',yn(p.prayerSpace)),fact('Alcohol served',yn(p.alcoholServed)),fact('Hours',p.hours||'Confirm before visiting'),fact('Price',p.priceLevel>=1&&p.priceLevel<=3?'₩'.repeat(p.priceLevel):'Not recorded'),fact('Certifier',p.certifier||'None recorded'));
+    const yn=v=>v===true?'Yes':v===false?'No':'Not recorded';
+    const keyFacts=el('div','key-facts');keyFacts.append(fact('Alcohol served',yn(p.alcoholServed)),fact('Prayer space',yn(p.prayerSpace)));
+    const facts=el('div','facts');
+    facts.append(fact('Hours',p.hours||'Confirm before visiting'),fact('Price',p.priceLevel>=1&&p.priceLevel<=3?'₩'.repeat(p.priceLevel):'Not recorded'),fact('Certifier',p.certifier||'None recorded'));
     if(p.effectiveTier==='certified_seen')facts.append(fact('Certificate expiry',p.certificateExpiry));
     if(p.type==='cafe')facts.append(fact('Free WiFi',yn(p.wifi)));
     if(p.vegetarianOptions)facts.append(fact('Vegetarian options',p.vegetarianOptions));
     if(p.nearestStation)facts.append(fact('Nearest station',p.nearestStation));
     if(p.transitTime)facts.append(el('p','',`Typical: ${p.transitTime}`));
-    const sources=el('details','sources');sources.append(el('summary','',`Sources (${p.sources.length})`));const list=el('ul');
+    const sources=el('div','sources');sources.append(el('strong','','Sources'));const list=el('ul');
     for(const url of p.sources){const li=el('li');li.append(link(new URL(url).hostname,url));list.append(li);}sources.append(list);
-    const directions=el('nav','directions');directions.setAttribute('aria-label',`Directions to ${p.name}`);
-    if(safeUrl(p.naverUrl))directions.append(link('Naver Map',p.naverUrl));if(safeUrl(p.googleUrl))directions.append(link('Google Maps',p.googleUrl));
-    article.append(meta,title,address,badge,basis,facts);
+    const more=el('details','card-details');more.append(el('summary','',`Details and sources (${p.sources.length})`),facts,sources);
+    const directions=el('nav','directions');directions.setAttribute('aria-label',`Find ${p.name} on a map`);
+    if(safeUrl(p.naverUrl))directions.append(link('Find on Naver Map',p.naverUrl));if(safeUrl(p.googleUrl))directions.append(link('Find on Google Maps',p.googleUrl));
+    const menu=el('details','directions-menu');menu.append(el('summary','','Directions'));
+    // A route from the mosque to itself helps nobody, so its card needs Near me first.
+    if(p.type!=='mosque'||userLoc){
+      const routes=el('nav','routes');routes.setAttribute('aria-label',`Routes to ${p.name}`);
+      routes.append(link('Transit · Naver (live arrivals)',naverRouteUrl(p,'transit',userLoc)),link('Walking · Naver',naverRouteUrl(p,'walk',userLoc)),link('Transit · Google',googleRouteUrl(p,userLoc)));
+      menu.append(routes,el('p','route-note','Route links open Naver Maps or Google Maps. With Near me on, they share your location with that service.'));
+    }
+    menu.append(directions);
+    article.append(meta,title,address,badge,basis,keyFacts);
     if(p.notes && p.type!=='mosque')article.append(el('p','card-notes',p.notes));
-    const routes=el('nav','routes');routes.setAttribute('aria-label',`Routes to ${p.name}`);
-    routes.append(link('Transit · Naver (live arrivals)',naverRouteUrl(p,'transit',userLoc)),link('Walking · Naver',naverRouteUrl(p,'walk',userLoc)),link('Transit · Google',googleRouteUrl(p,userLoc)));
-    article.append(sources,routes,el('p','route-note','Route links open Naver Maps or Google Maps. With Near me on, they share your location with that service.'),directions);return article;
+    article.append(menu,more);return article;
   }
   function renderPlaces() {
     visible=filterPlaces(records,filters);
     if(userLoc)visible=sortByUser(visible,userLoc);
     $('listings').replaceChildren(...visible.map(card));
     $('empty-state').hidden=visible.length>0;
+    renderEmpty();
     $('result-count').textContent=`${visible.length} current ${visible.length===1?'place':'places'} · ${userLoc?'sorted by distance from you':'nearest to Seoul Central Mosque first'}`;
     if (!markers) return;
     markers.clearLayers();
@@ -194,24 +223,29 @@
     }
     userMarker.setLatLng(userLoc);map.setView(userLoc,15);
   }
-  function setNearMe(active) { $('near-me').hidden=active;$('near-me-reset').hidden=!active; }
-  function locationFailed() { $('near-me').disabled=false;$('near-me-status').textContent='Location unavailable — showing distance from the mosque instead'; }
+  function setNearMe(active) { $('near-me').setAttribute('aria-pressed',String(active));$('near-me-reset').setAttribute('aria-pressed',String(!active)); }
+  function endLocating() { $('near-me').disabled=false;$('near-me').textContent='Near me'; }
+  function locationFailed() { endLocating();$('near-me-status').textContent='Location unavailable — showing distance from the mosque instead'; }
   function useNearMe() {
     if(!navigator.geolocation){locationFailed();return;}
-    $('near-me').disabled=true;$('near-me-status').textContent='';
+    $('near-me').disabled=true;$('near-me').textContent='Locating…';$('near-me-status').textContent='';
     navigator.geolocation.getCurrentPosition(position=>{
       const {latitude,longitude}=position.coords;
       if(!Number.isFinite(latitude)||!Number.isFinite(longitude)){locationFailed();return;}
-      $('near-me').disabled=false;userLoc=[latitude,longitude];setNearMe(true);renderPlaces();showUserOnMap();
+      endLocating();userLoc=[latitude,longitude];setNearMe(true);renderPlaces();showUserOnMap();
     },locationFailed,{timeout:10000});
   }
   function resetNearMe() {
+    if(!userLoc)return;
     userLoc=null;setNearMe(false);
     if(userMarker){userMarker.remove();userMarker=null;}
     if(map)map.setView(MOSQUE,16);
-    renderPlaces();$('near-me').focus();
+    renderPlaces();
   }
-  let phraseCategory='all', overlayOpener=null;
+  const ICONS={listen:'<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 9.500v5h3.500L12 18.500v-13L7.500 9.500ZM15.500 9a4 4 0 0 1 0 6M18 6.500a8 8 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.700" stroke-linecap="round" stroke-linejoin="round"/></svg>',star:'<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 4 2.500 5.200 5.700.8-4.100 4 1 5.700-5.100-2.700-5.100 2.700 1-5.700-4.100-4 5.700-.8Z" fill="none" stroke="currentColor" stroke-width="1.700" stroke-linejoin="round"/></svg>'};
+  let phraseCategory='all', overlayOpener=null, overlayPhrase=null;
+  const savedList=storage.get('shg:saved-phrases');
+  const savedPhrases=new Set(Array.isArray(savedList)?savedList:[]);
   function renderPhraseChips() {
     $('phrase-chips').replaceChildren(...Object.entries(PHRASE_CATEGORIES).map(([key,label])=>{
       const chip=el('button','phrase-chip',label);chip.type='button';chip.setAttribute('aria-pressed',String(key===phraseCategory));
@@ -219,24 +253,69 @@
       return chip;
     }));
   }
+  function iconButton(cls,icon,label) { const b=el('button',cls);b.type='button';b.innerHTML=icon;b.setAttribute('aria-label',label);return b; }
+  function toggleSaved(phrase,button) {
+    const on=!savedPhrases.has(phrase.en);
+    if(on)savedPhrases.add(phrase.en);else savedPhrases.delete(phrase.en);
+    storage.set('shg:saved-phrases',[...savedPhrases]);
+    button.setAttribute('aria-pressed',String(on));
+    if(phraseCategory==='saved')renderPhrases();
+  }
   function renderPhrases() {
-    const shown=matchPhrases(window.PHRASES||[],phraseCategory,$('phrase-search').value);
+    const inSaved=phraseCategory==='saved', query=$('phrase-search').value;
+    const source=inSaved?(window.PHRASES||[]).filter(p=>savedPhrases.has(p.en)):window.PHRASES||[];
+    const shown=matchPhrases(source,inSaved?'all':phraseCategory,query);
     $('phrase-list').replaceChildren(...shown.map(p=>{
-      const row=el('button','phrase-row');row.type='button';
+      const item=el('div','phrase-item'), row=el('button','phrase-row');row.type='button';
       const ko=el('span','phrase-ko',p.ko);ko.lang='ko';
       row.append(el('span','phrase-en',p.en),ko,el('span','phrase-rom',p.romanization));
       row.addEventListener('click',()=>openOverlay(p,row));
-      return row;
+      const listen=iconButton('phrase-action',ICONS.listen,`Listen to ${p.en}`);listen.addEventListener('click',()=>speakPhrase(p));
+      const save=iconButton('phrase-action phrase-save',ICONS.star,`Save ${p.en}`);save.setAttribute('aria-pressed',String(savedPhrases.has(p.en)));save.addEventListener('click',()=>toggleSaved(p,save));
+      const actions=el('div','phrase-actions');actions.append(listen,save);
+      item.append(row,actions);return item;
     }));
     $('phrase-count').textContent=`${shown.length} ${shown.length===1?'phrase':'phrases'}`;
+    $('phrase-empty').hidden=shown.length>0;
+    $('phrase-empty').textContent=inSaved&&!savedPhrases.size?'Tap the star on any phrase to save it here.':'No phrases match that search. Try a different word.';
+  }
+  function setVoiceStatus(text) { $('phrase-voice-status').textContent=text;$('overlay-status').textContent=text; }
+  const NO_VOICE='This device has no Korean voice. Show the phrase instead.';
+  function speakPhrase(phrase) {
+    if(!window.speechSynthesis||!window.SpeechSynthesisUtterance){setVoiceStatus(NO_VOICE);return;}
+    const voices=speechSynthesis.getVoices(), korean=voices.find(v=>v.lang.toLowerCase().startsWith('ko'));
+    // An empty list can just mean voices are still loading, so only a full list without Korean rules it out.
+    if(voices.length&&!korean){setVoiceStatus(NO_VOICE);return;}
+    speechSynthesis.cancel();setVoiceStatus('');
+    const utterance=new SpeechSynthesisUtterance(phrase.ko);
+    utterance.lang='ko-KR';utterance.rate=.85;if(korean)utterance.voice=korean;
+    utterance.onerror=e=>{if(e.error!=='canceled'&&e.error!=='interrupted')setVoiceStatus(NO_VOICE);};
+    speechSynthesis.speak(utterance);
   }
   function openOverlay(phrase,opener) {
-    overlayOpener=opener;$('overlay-ko').textContent=phrase.ko;$('overlay-en').textContent=phrase.en;
+    overlayOpener=opener;overlayPhrase=phrase;$('overlay-ko').textContent=phrase.ko;$('overlay-en').textContent=phrase.en;setVoiceStatus('');
     $('phrase-overlay').hidden=false;document.body.classList.add('overlay-open');$('overlay-close').focus();
   }
   function closeOverlay() {
+    window.speechSynthesis?.cancel();
     $('phrase-overlay').hidden=true;document.body.classList.remove('overlay-open');
-    if(overlayOpener?.isConnected)overlayOpener.focus();overlayOpener=null;
+    if(overlayOpener?.isConnected)overlayOpener.focus();overlayOpener=null;overlayPhrase=null;
+  }
+  function initNav() {
+    const links=[...document.querySelectorAll('.app-nav a')];
+    const activate=hash=>{for(const a of links){if(a.hash===hash)a.setAttribute('aria-current','true');else a.removeAttribute('aria-current');}};
+    for(const a of links)a.addEventListener('click',()=>activate(a.hash));
+    if(!window.IntersectionObserver)return;
+    const observer=new IntersectionObserver(entries=>{for(const e of entries)if(e.isIntersecting)activate(`#${e.target.id}`);},{rootMargin:'-35% 0px -60% 0px'});
+    for(const a of links)observer.observe(document.querySelector(a.hash));
+  }
+  function initInstall() {
+    if(window.matchMedia?.('(display-mode: standalone)').matches||navigator.standalone)return;
+    let installPrompt=null;
+    if(/iPhone|iPad|iPod/.test(navigator.userAgent)){$('install-row').hidden=false;$('install-hint').hidden=false;}
+    window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('install-row').hidden=false;$('install-app').hidden=false;});
+    $('install-app').addEventListener('click',async()=>{if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$('install-row').hidden=true;});
+    window.addEventListener('appinstalled',()=>{$('install-row').hidden=true;});
   }
   function renderPrayers() {
     const d=days.find(d=>d.date===today);
@@ -260,18 +339,19 @@
       storage.set(key,data);return {data,cached:false};
     }catch(error){if(validTimings(cached,date,config))return {data:cached,cached:true,offline:true};throw error;}
   }
+  function setLoading(value) { loading=value;$('prayer-grid').classList.toggle('is-loading',value); }
   async function loadPrayers(force=false) {
-    const request=++generation, date=today, config={...settings};loading=true;days=[];updateDates();renderPrayers();$('countdown').textContent='Loading…';
+    const request=++generation, date=today, config={...settings};setLoading(true);days=[];updateDates();renderPrayers();$('countdown').textContent='Loading…';
     $('prayer-status').textContent='Fetching today’s timings from AlAdhan…';
     try{
       const result=await getTimings(date,config,force);
       if(request!==generation||date!==today)return;
       days=[{date,timings:result.data.timings}];updateDates(result.data.date.hijri);renderPrayers();
       $('prayer-status').textContent=`${result.offline?'Offline · using matching saved timings.':result.cached?'Today’s saved timings.':'Today’s timings from AlAdhan.'} Calculated times; confirm congregation times with the mosque.`;
-      loading=false;tick();
+      setLoading(false);tick();
       try{const tomorrow=shiftDate(date,1), next=await getTimings(tomorrow,config,force);if(request!==generation||date!==today)return;days.push({date:tomorrow,timings:next.data.timings});tick();}
       catch{if(request===generation)$('prayer-status').textContent+=' Tomorrow’s Fajr unavailable; refresh to retry.';}
-    }catch{if(request!==generation)return;loading=false;$('countdown').textContent='Times unavailable';$('prayer-status').textContent='Could not load today’s times. Check your connection and use “Refresh times” to retry. Older-day timings are never shown.';}
+    }catch{if(request!==generation)return;setLoading(false);$('countdown').textContent='Times unavailable';$('prayer-status').textContent='Could not load today’s times. Check your connection and use “Refresh times” to retry. Older-day timings are never shown.';}
   }
   async function loadQibla() {
     $('retry-qibla').hidden=true;
@@ -369,9 +449,10 @@
   $('use-compass').addEventListener('click',()=>{if(compassOn)stopCompass();else startCompass();});
   $('phrase-search').addEventListener('input',renderPhrases);
   $('phrase-overlay').addEventListener('click',closeOverlay);
-  document.addEventListener('keydown',e=>{if($('phrase-overlay').hidden)return;if(e.key==='Escape')closeOverlay();else if(e.key==='Tab'){e.preventDefault();$('overlay-close').focus();}});
+  $('overlay-listen').addEventListener('click',e=>{e.stopPropagation();if(overlayPhrase)speakPhrase(overlayPhrase);});
+  document.addEventListener('keydown',e=>{if($('phrase-overlay').hidden)return;if(e.key==='Escape')closeOverlay();else if(e.key==='Tab'){e.preventDefault();($('overlay-close')===document.activeElement?$('overlay-listen'):$('overlay-close')).focus();}});
   document.addEventListener('visibilitychange',()=>{lastTick=Date.now();if(document.visibilityState==='visible'){tick();if(!days.length&&!loading)loadPrayers();}});
   window.addEventListener('online',()=>{loadPrayers();loadQibla();});
-  updateDates();refreshRecords();initMap();renderPhraseChips();renderPhrases();loadPrayers();loadQibla();setInterval(tick,1000);
+  updateDates();refreshRecords();initMap();renderPhraseChips();renderPhrases();initNav();initInstall();loadPrayers();loadQibla();setInterval(tick,1000);
   if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();

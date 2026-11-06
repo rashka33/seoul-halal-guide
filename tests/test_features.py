@@ -101,7 +101,8 @@ class NearMeTests(FeatureTestCase):
         expect(page.locator('.you-pin')).to_have_count(0)
         expect(page.locator('#place-far .distance')).to_contain_text('min walk')
         expect(page.locator('#result-count')).to_contain_text('nearest to Seoul Central Mosque first')
-        expect(page.locator('#near-me')).to_be_visible()
+        expect(page.locator('#near-me')).to_have_attribute('aria-pressed', 'false')
+        expect(page.locator('#near-me-reset')).to_have_attribute('aria-pressed', 'true')
 
     def assert_failure_changes_nothing_else(self, script):
         page = self.open(script)
@@ -110,8 +111,10 @@ class NearMeTests(FeatureTestCase):
         expect(page.locator('#near-me-status')).to_have_text(FAILURE)
         self.assertEqual((page.locator('#place-far').inner_text(), self.card_ids(page), page.locator('#result-count').inner_text()), before)
         expect(page.locator('.you-pin')).to_have_count(0)
-        expect(page.locator('#near-me-reset')).to_be_hidden()
+        expect(page.locator('#near-me-reset')).to_have_attribute('aria-pressed', 'true')
+        expect(page.locator('#near-me')).to_have_attribute('aria-pressed', 'false')
         expect(page.locator('#near-me')).to_be_enabled()
+        expect(page.locator('#near-me')).to_have_text('Near me')
 
     def test_denial_shows_exact_message(self):
         self.assert_failure_changes_nothing_else(self.geo_script("fail({code: 1, message: 'denied'});"))
@@ -164,14 +167,18 @@ class RouteLinkTests(FeatureTestCase):
         page.locator('#near-me-reset').click()
         self.assertEqual(self.route_links(page, 'far'), before)
 
-    def test_every_card_has_three_links_and_no_referrer(self):
-        page = self.open()
+    def test_cards_have_three_links_with_no_referrer_and_mosque_needs_near_me(self):
+        page = self.open(self.geo_success())
+        expect(page.locator('.routes a')).to_have_count(6)
+        self.assertEqual(page.locator('.routes a[rel="noopener noreferrer"]').count(), 6)
+        expect(page.locator('#place-seoul-central-mosque .routes')).to_have_count(0)
+        expect(page.locator('#place-seoul-central-mosque .directions a')).to_have_count(0)
+        page.locator('#near-me').click()
         expect(page.locator('.routes a')).to_have_count(9)
-        self.assertEqual(page.locator('.routes a[rel="noopener noreferrer"]').count(), 9)
 
     def test_every_card_discloses_what_a_route_link_shares(self):
         page = self.open()
-        expect(page.locator('.routes + .route-note')).to_have_count(3)
+        expect(page.locator('.routes + .route-note')).to_have_count(2)
         expect(page.locator('.route-note').first).to_have_text('Route links open Naver Maps or Google Maps. With Near me on, they share your location with that service.')
 
     def test_station_and_time_render_only_when_present(self):
@@ -250,7 +257,7 @@ class PhraseTests(FeatureTestCase):
 
     def test_category_chips_use_human_labels_and_filter(self):
         page = self.open()
-        self.assertEqual(page.locator('.phrase-chip').all_inner_texts(), ['All', 'Greetings & courtesy', 'Food & halal', 'Vegetarian requests', 'Directions & transport', 'Money & shopping', 'Prayer & mosque', 'Emergencies & help', 'Numbers', 'Label-spotting words'])
+        self.assertEqual(page.locator('.phrase-chip').all_inner_texts(), ['All', 'Saved', 'Greetings & courtesy', 'Food & halal', 'Vegetarian requests', 'Directions & transport', 'Money & shopping', 'Prayer & mosque', 'Emergencies & help', 'Numbers', 'Label-spotting words'])
         counts = {'Greetings & courtesy': 12, 'Food & halal': 16, 'Vegetarian requests': 6, 'Directions & transport': 14, 'Money & shopping': 10, 'Prayer & mosque': 10, 'Emergencies & help': 10, 'Numbers': 12, 'Label-spotting words': 10, 'All': 100}
         for label, count in counts.items():
             page.get_by_role('button', name=label, exact=True).click()
@@ -267,6 +274,7 @@ class PhraseTests(FeatureTestCase):
         expect(page.locator('.phrase-row')).to_have_count(2)
         page.locator('#phrase-search').fill('zzzz')
         expect(page.locator('#phrase-count')).to_have_text('0 phrases')
+        expect(page.locator('#phrase-empty')).to_contain_text('No phrases match')
 
     def open_overlay(self, page):
         page.locator('.phrase-row').first.click()
@@ -437,8 +445,174 @@ class AdhanTests(FeatureTestCase):
             self.assertNotIn('placeholder', (ROOT / name).read_text().lower(), name)
         self.assertGreater((ROOT / 'assets/adhan.mp3').stat().st_size, 1000000)
 
+class AppExperienceTests(FeatureTestCase):
+    REAL = None
+
+    def phone(self, init_script='', places=FIXTURE, color_scheme='light'):
+        context = self.browser.new_context(service_workers='block', viewport={'width': 390, 'height': 844}, color_scheme=color_scheme)
+        self.addCleanup(context.close)
+        context.route('**/tile.openstreetmap.org/**', lambda route: route.abort())
+        context.route('https://api.aladhan.com/**', lambda route: route.abort())
+        if places is not None:
+            context.route('**/data/places.js', lambda route: route.fulfill(body='window.PLACES=' + json.dumps(places), content_type='text/javascript'))
+        if init_script:
+            context.add_init_script(init_script)
+        page = context.new_page()
+        page.goto(self.url)
+        return page
+
+    def test_bottom_menu_on_phone_only_and_moves_between_sections(self):
+        page = self.phone()
+        nav = page.locator('.app-nav')
+        expect(nav).to_be_visible()
+        self.assertEqual(nav.locator('a').all_inner_texts(), ['Prayer', 'Places', 'Korean'])
+        for box in [a.bounding_box() for a in nav.locator('a').all()]:
+            self.assertGreaterEqual(box['height'], 44)
+        nav.get_by_text('Korean').click()
+        expect(nav.get_by_text('Korean')).to_have_attribute('aria-current', 'true')
+        page.wait_for_function("document.querySelector('#useful-korean').getBoundingClientRect().top < 200")
+        page.set_viewport_size({'width': 1280, 'height': 800})
+        expect(nav).to_be_hidden()
+
+    def test_menu_does_not_cover_the_end_of_the_page(self):
+        page = self.phone()
+        page.evaluate('window.scrollTo({top: document.documentElement.scrollHeight, behavior: "instant"})')
+        footer = page.locator('footer').bounding_box()
+        nav = page.locator('.app-nav').bounding_box()
+        self.assertLessEqual(footer['y'] + footer['height'], nav['y'] + 1)
+
+    def test_card_shows_one_directions_button_until_tapped(self):
+        page = self.phone()
+        card = page.locator('#place-near')
+        expect(card.get_by_text('Directions', exact=True)).to_be_visible()
+        expect(card.locator('.routes a').first).to_be_hidden()
+        expect(card.locator('.check-basis')).to_be_visible()
+        expect(card.locator('.badge')).to_be_visible()
+        expect(card.locator('.key-facts')).to_contain_text('Alcohol served')
+        expect(card.locator('.facts')).to_be_hidden()
+        card.get_by_text('Directions', exact=True).click()
+        expect(card.locator('.routes a')).to_have_count(3)
+        expect(card.locator('.routes a').first).to_be_visible()
+        expect(card.locator('.route-note')).to_be_visible()
+        card.get_by_text('Details and sources').click()
+        expect(card.locator('.facts')).to_be_visible()
+
+    def test_mosque_card_avoids_a_zero_distance(self):
+        page = self.phone()
+        expect(page.locator('#place-seoul-central-mosque .distance')).to_have_text('Distances start here')
+
+    def test_install_files_are_valid(self):
+        manifest = json.loads((ROOT / 'manifest.webmanifest').read_text())
+        self.assertEqual((manifest['display'], manifest['start_url']), ('standalone', './'))
+        sizes = {icon['sizes'] for icon in manifest['icons']}
+        self.assertTrue({'192x192', '512x512'} <= sizes)
+        self.assertTrue(any(icon.get('purpose') == 'maskable' for icon in manifest['icons']))
+        for icon in manifest['icons']:
+            data = (ROOT / icon['src']).read_bytes()
+            self.assertEqual(data[:4], b'\x89PNG')
+            width, height = int.from_bytes(data[16:20], 'big'), int.from_bytes(data[20:24], 'big')
+            self.assertEqual(f'{width}x{height}', icon['sizes'])
+        page = self.phone()
+        self.assertEqual(page.evaluate("fetch(document.querySelector('link[rel=manifest]').href).then(r => r.status)"), 200)
+
+    def test_install_button_appears_when_the_browser_offers_it(self):
+        page = self.phone("window.asked = 0;")
+        expect(page.locator('#install-row')).to_be_hidden()
+        page.evaluate("""() => { const e = new Event('beforeinstallprompt'); e.prompt = () => { window.asked++; }; e.userChoice = Promise.resolve({outcome: 'accepted'}); window.dispatchEvent(e); }""")
+        page.locator('#install-app').click()
+        self.assertEqual(page.evaluate('asked'), 1)
+        expect(page.locator('#install-row')).to_be_hidden()
+
+    def test_iphone_gets_add_to_home_screen_hint(self):
+        page = self.phone("Object.defineProperty(navigator, 'userAgent', {value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)'});")
+        expect(page.locator('#install-hint')).to_be_visible()
+        expect(page.locator('#install-app')).to_be_hidden()
+
+    def test_one_sort_choice_with_a_separately_named_distance_filter(self):
+        page = self.phone(self.geo_success())
+        expect(page.locator('.sort-control button')).to_have_text(['Mosque order', 'Near me'])
+        expect(page.locator('.near-filter')).to_contain_text('Within 1.1 km of the mosque')
+        page.locator('#near-me').click()
+        expect(page.locator('#near-me')).to_have_attribute('aria-pressed', 'true')
+        expect(page.locator('#result-count')).to_contain_text('distance from you')
+
+    def test_dark_mode_follows_the_device(self):
+        light = self.phone()
+        dark = self.phone(color_scheme='dark')
+        color = 'getComputedStyle(document.body).backgroundColor'
+        self.assertEqual(light.evaluate(color), 'rgb(255, 255, 255)')
+        self.assertEqual(dark.evaluate(color), 'rgb(16, 35, 28)')
+
+    def test_saved_phrases_survive_a_reload_and_get_their_own_chip(self):
+        page = self.phone()
+        saved = page.get_by_role('button', name='Saved', exact=True)
+        saved.click()
+        expect(page.locator('.phrase-row')).to_have_count(0)
+        expect(page.locator('#phrase-empty')).to_contain_text('Tap the star')
+        page.get_by_role('button', name='All', exact=True).click()
+        star = page.get_by_role('button', name='Save Is this halal?', exact=True)
+        star.click()
+        expect(star).to_have_attribute('aria-pressed', 'true')
+        page.reload()
+        page.get_by_role('button', name='Saved', exact=True).click()
+        expect(page.locator('.phrase-row')).to_have_count(1)
+        expect(page.locator('.phrase-en')).to_have_text('Is this halal?')
+        page.get_by_role('button', name='Save Is this halal?', exact=True).click()
+        expect(page.locator('.phrase-row')).to_have_count(0)
+
+    SPEECH = """
+      window.spoken = [];
+      window.qaVoices = %s;
+      window.SpeechSynthesisUtterance = function(text) { this.text = text; };
+      Object.defineProperty(window, 'speechSynthesis', {value: {getVoices: () => window.qaVoices, cancel() {}, speak(u) { window.spoken.push([u.text, u.lang]); }}});
+    """
+
+    def test_listen_speaks_the_hangul_in_korean(self):
+        page = self.phone(self.SPEECH % '[{"lang": "ko-KR"}]')
+        page.get_by_role('button', name='Listen to Hello', exact=True).click()
+        self.assertEqual(page.evaluate('spoken'), [['안녕하세요', 'ko-KR']])
+        expect(page.locator('#phrase-overlay')).to_be_hidden()
+        page.locator('.phrase-row').first.click()
+        page.locator('#overlay-listen').click()
+        expect(page.locator('#phrase-overlay')).to_be_visible()
+        self.assertEqual(len(page.evaluate('spoken')), 2)
+
+    def test_listen_explains_when_no_korean_voice_exists(self):
+        page = self.phone(self.SPEECH % '[{"lang": "en-US"}]')
+        page.get_by_role('button', name='Listen to Hello', exact=True).click()
+        expect(page.locator('#phrase-voice-status')).to_have_text('This device has no Korean voice. Show the phrase instead.')
+        self.assertEqual(page.evaluate('spoken'), [])
+
+    def test_real_data_explains_the_places_still_waiting(self):
+        page = self.phone(places=None)
+        expect(page.locator('#pending-count')).to_have_text('14 more places are waiting for a check')
+        expect(page.locator('#pending-detail')).to_contain_text('8 restaurants, 2 groceries and 4 cafés')
+        page.locator('#type-filter').select_option('cafe')
+        expect(page.locator('#empty-title')).to_have_text('No cafés checked yet')
+        expect(page.locator('#empty-text')).to_contain_text('4 cafés waiting for a check')
+        page.locator('#reset-filters').click()
+        expect(page.locator('.place-card')).to_have_count(1)
+
+    def test_filter_mismatch_gets_generic_empty_message(self):
+        page = self.phone()
+        page.locator('#tier-filter').select_option('certified_seen')
+        expect(page.locator('#empty-title')).to_have_text('No places match these filters')
+        expect(page.locator('#pending-note')).to_be_hidden()
+
+    def test_calculation_settings_tuck_away_and_still_work(self):
+        page = self.phone()
+        expect(page.locator('#method')).to_be_hidden()
+        page.get_by_text('Calculation settings').click()
+        page.locator('#method').select_option('2')
+        self.assertEqual(page.evaluate("JSON.parse(localStorage.getItem('shg:settings')).method"), '2')
+
+    def test_no_side_scroll_on_small_phone(self):
+        page = self.phone(places=None)
+        page.set_viewport_size({'width': 320, 'height': 640})
+        self.assertLessEqual(page.evaluate('document.documentElement.scrollWidth'), 320)
+
 class IntegrityTests(unittest.TestCase):
-    SITE = ['index.html', 'app.js', 'styles.css', 'sw.js', 'data/places.js', 'data/phrases.js', 'README.md', 'DESK_CHECK.md', 'docs/DESIGN.md', 'tests/test_features.py']
+    SITE = ['index.html', 'app.js', 'styles.css', 'sw.js', 'data/places.js', 'data/phrases.js', 'README.md', 'DESK_CHECK.md', 'docs/DESIGN.md', 'tests/test_features.py', 'manifest.webmanifest']
 
     def test_no_banned_wording(self):
         for name in self.SITE:

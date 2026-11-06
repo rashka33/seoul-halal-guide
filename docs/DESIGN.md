@@ -20,3 +20,7 @@ Deliver index.html, styles.css, app.js, data/places.js, DESK_CHECK.md and README
 
 ## Verification
 Check real prayer API response and method IDs against official docs. Browser check desktop and narrow mobile; test all five requested acceptance cases, including stale fixture and filter-marker equality. Check API failures, localStorage denial, next-day rollover and absent audio. Review current web-design-guidelines for semantics, labels, focus, contrast, touch sizes, reduced motion and responsive overflow. Report only tests actually run. GitHub repository creation and deployment depend on available authenticated access; no invented URLs.
+
+## App layer (2026-11-07)
+Owner-approved additions on the same visual system: phone bottom menu, one Directions button per card with facts and sources one tap away, a two-way sort control (Mosque order, Near me) beside a separately named 1.1 km filter, device-following dark mode, install support, saved phrases and on-device speech. The check date, tier badge and basis always stay visible on a card. The next-prayer countdown is the one emphasized element. Georgia remains for the site name only.
+

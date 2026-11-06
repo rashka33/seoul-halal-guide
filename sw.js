@@ -1,7 +1,7 @@
 /* Offline copy of this site's own files. Network first, so a live visit always gets current listings.
  * Third-party requests (AlAdhan, map tiles) are left alone. Freshness is still judged at runtime. */
-const CACHE = 'shg-v1';
-const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'data/places.js', 'data/phrases.js', 'assets/vendor/leaflet/leaflet.css', 'assets/vendor/leaflet/leaflet.js'];
+const CACHE = 'shg-v2';
+const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'data/places.js', 'data/phrases.js', 'assets/vendor/leaflet/leaflet.css', 'assets/vendor/leaflet/leaflet.js', 'manifest.webmanifest', 'assets/icons/favicon.svg', 'assets/icons/icon-192.png', 'assets/icons/apple-touch-icon.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));

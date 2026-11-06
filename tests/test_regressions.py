@@ -79,6 +79,7 @@ class GuideBrowserRegressions(unittest.TestCase):
             page.locator('#auto-adhan').click()
             expect(page.locator('#audio-status')).to_contain_text('could not start')
             self.assertEqual(page.evaluate('qaAudios[0].volume'), 1)
+            self.assertFalse(page.evaluate('qaAudios[0].muted'))
             page.locator('#play-adhan').click()
             expect(page.locator('#audio-status')).to_contain_text('Playing adhan')
             self.assertEqual(page.evaluate('qaAudios[0].volume'), 1)

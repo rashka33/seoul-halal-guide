@@ -87,7 +87,7 @@
   let today=seoulDate(), records=[], visible=[], map=null, markers=null, days=[], generation=0, loading=false;
   // In memory only: never stored, logged or exposed on window.
   let userLoc=null, userMarker=null;
-  let lastTick=Date.now(), audio=null, audioObjectUrl=null, audioReady=null, audioArmedAt=Infinity;
+  let lastTick=Date.now(), audio=null, audioArmedAt=Infinity;
   const played=new Set();
   const filters={type:'all',tier:'all',near:false};
   $('method').value=settings.method;
@@ -305,14 +305,14 @@
     window.addEventListener('deviceorientationabsolute',onOrientation);window.addEventListener('deviceorientation',onOrientation);
     compassTimer=setTimeout(()=>stopCompass(COMPASS_FAILED),4000);
   }
-  async function prepareAudio() {
-    if(audioReady)return audioReady;
-    audioReady=(async()=>{const r=await fetch('assets/adhan.mp3');if(!r.ok)throw new Error('Audio absent');const blob=await r.blob();if(!blob.size)throw new Error('Audio placeholder');audioObjectUrl=URL.createObjectURL(blob);audio=new Audio(audioObjectUrl);audio.addEventListener('ended',()=>{$('play-adhan').lastChild.textContent='Play Adhan';});return audio;})();
-    try{return await audioReady;}catch(error){audioReady=null;throw error;}
+  // No fetch before play(): iOS only honors a play() made directly from the tap.
+  function prepareAudio() {
+    if(!audio){audio=new Audio('assets/adhan.mp3');audio.addEventListener('ended',()=>{$('play-adhan').lastChild.textContent='Play Adhan';});}
+    return audio;
   }
   async function playAdhan() {
-    try{const a=await prepareAudio();a.volume=1;a.currentTime=0;await a.play();$('audio-status').textContent='Playing adhan. Playback only runs while this page is open.';$('play-adhan').lastChild.textContent='Stop Adhan';}
-    catch{$('audio-status').textContent='Adhan audio is unavailable or playback was blocked. Add a playable recording at assets/adhan.mp3, then press Play Adhan.';}
+    try{const a=prepareAudio();a.muted=false;a.volume=1;a.currentTime=0;await a.play();$('audio-status').textContent='Playing adhan. Playback only runs while this page is open.';$('play-adhan').lastChild.textContent='Stop Adhan';}
+    catch{$('audio-status').textContent='Adhan audio could not play. Check your connection and allow audio, then press Play Adhan.';}
   }
   function tick() {
     const now=Date.now(), current=seoulDate(new Date(now));
@@ -341,13 +341,13 @@
     }
     let unlockedAudio = null;
     try {
-      const a = await prepareAudio();
-      if (version !== audioToggleVersion || !$('auto-adhan').checked) return;
+      const a = prepareAudio();
       if (a.paused) {
         unlockedAudio = a;
-        a.volume = 0;
+        // iOS ignores volume changes, so muted is what keeps this unlock silent.
+        a.muted = true;
         try { await a.play(); }
-        finally { a.pause(); a.currentTime = 0; a.volume = 1; }
+        finally { a.pause(); a.currentTime = 0; a.muted = false; }
       }
       if (version !== audioToggleVersion || !$('auto-adhan').checked) return;
       audioArmedAt = Date.now();
@@ -358,9 +358,9 @@
       $('auto-adhan').checked = false;
       settings.auto = false;
       saveSettings();
-      $('audio-status').textContent = 'Automatic adhan could not start. Add a playable assets/adhan.mp3 recording and allow audio, then turn it on again.';
+      $('audio-status').textContent = 'Automatic adhan could not start. Check your connection and allow audio, then turn it on again.';
     } finally {
-      if (unlockedAudio) unlockedAudio.volume = 1;
+      if (unlockedAudio) unlockedAudio.muted = false;
     }
   });
   for(const [id,key] of [['type-filter','type'],['tier-filter','tier'],['near-filter','near']])$(id).addEventListener('change',()=>{filters[key]=key==='near'?$(id).checked:$(id).value;renderPlaces();});

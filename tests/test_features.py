@@ -366,6 +366,77 @@ class CompassTests(FeatureTestCase):
         page.locator('#use-compass').click()
         self.assert_falls_back(page)
 
+class AdhanTests(FeatureTestCase):
+    CAPTURE = """
+      window.qaAudios = [];
+      const OriginalAudio = window.Audio;
+      window.Audio = function(...args) { const audio = new OriginalAudio(...args); window.qaAudios.push(audio); return audio; };
+    """
+
+    def wait_until_playing(self, page):
+        page.wait_for_function('qaAudios[0] && !qaAudios[0].paused && qaAudios[0].currentTime > 0')
+
+    def test_nothing_loads_until_a_tap(self):
+        page = self.open(self.CAPTURE)
+        requests = []
+        page.on('request', lambda request: requests.append(request.url))
+        page.wait_for_timeout(300)
+        self.assertEqual(page.evaluate('qaAudios.length'), 0)
+        self.assertFalse([url for url in requests if 'adhan.mp3' in url])
+
+    def test_button_plays_the_real_recording_then_stops(self):
+        page = self.open(self.CAPTURE)
+        page.locator('#play-adhan').click()
+        self.wait_until_playing(page)
+        expect(page.locator('#audio-status')).to_contain_text('Playing adhan')
+        expect(page.locator('#play-adhan')).to_have_text('Stop Adhan')
+        self.assertAlmostEqual(page.evaluate('qaAudios[0].duration'), 154, delta=1)
+        self.assertFalse(page.evaluate('qaAudios[0].muted'))
+        page.locator('#play-adhan').click()
+        expect(page.locator('#play-adhan')).to_have_text('Play Adhan')
+        self.assertTrue(page.evaluate('qaAudios[0].paused'))
+
+    def test_automatic_toggle_unlocks_silently_and_plays_at_prayer_time(self):
+        now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).replace(hour=11, minute=59, second=50, microsecond=0)
+        timings = {name: time for name, time in zip(['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'], ['05:00', '06:30', '12:00', '15:00', '17:30', '19:00'])}
+        def fulfill(route):
+            date = route.request.url.split('/timings/')[1].split('?')[0]
+            route.fulfill(json={'code': 200, 'data': {'timings': timings, 'date': {'gregorian': {'date': date}, 'hijri': {'day': '1', 'month': {'en': 'Test'}, 'year': '1448'}}, 'meta': {'timezone': 'Asia/Seoul', 'method': {'id': 3}, 'school': 'STANDARD'}}})
+        context = self.browser.new_context(service_workers='block')
+        self.addCleanup(context.close)
+        context.route('**/tile.openstreetmap.org/**', lambda route: route.abort())
+        context.route('https://api.aladhan.com/v1/qibla/**', lambda route: route.abort())
+        context.route('https://api.aladhan.com/v1/timings/**', fulfill)
+        context.add_init_script(self.CAPTURE + "window.qaMuted = []; const play = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function() { window.qaMuted.push(this.muted); return play.call(this); };")
+        page = context.new_page()
+        page.clock.install(time=now)
+        page.goto(self.url)
+        page.clock.run_for(1000)
+        expect(page.locator('#countdown')).to_contain_text('Dhuhr')
+        page.locator('#auto-adhan').click()
+        expect(page.locator('#audio-status')).to_contain_text('Automatic adhan is on')
+        self.assertEqual(page.evaluate('qaMuted'), [True])
+        self.assertTrue(page.evaluate('qaAudios[0].paused'))
+        self.assertFalse(page.evaluate('qaAudios[0].muted'))
+        page.clock.run_for(12000)
+        self.wait_until_playing(page)
+        self.assertEqual(page.evaluate('qaMuted'), [True, False])
+        expect(page.locator('#audio-status')).to_contain_text('Playing adhan')
+
+    def test_credit_stays_visible_and_names_the_source(self):
+        page = self.open()
+        credit = page.locator('.adhan-credit')
+        expect(credit).to_contain_text('Adam-synagda')
+        expect(credit).to_contain_text('CC0')
+        expect(credit.locator('a')).to_have_attribute('href', 'https://commons.wikimedia.org/wiki/File:Beautiful_adhan.ogg')
+        page.locator('#play-adhan').click()
+        expect(credit).to_be_visible()
+
+    def test_placeholder_wording_is_gone(self):
+        for name in ('index.html', 'app.js', 'README.md', 'assets/README.md'):
+            self.assertNotIn('placeholder', (ROOT / name).read_text().lower(), name)
+        self.assertGreater((ROOT / 'assets/adhan.mp3').stat().st_size, 1000000)
+
 class IntegrityTests(unittest.TestCase):
     SITE = ['index.html', 'app.js', 'styles.css', 'sw.js', 'data/places.js', 'data/phrases.js', 'README.md', 'DESK_CHECK.md', 'docs/DESIGN.md', 'tests/test_features.py']
 

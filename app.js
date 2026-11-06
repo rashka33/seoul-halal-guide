@@ -135,7 +135,7 @@
     if(p.notes && p.type!=='mosque')article.append(el('p','card-notes',p.notes));
     const routes=el('nav','routes');routes.setAttribute('aria-label',`Routes to ${p.name}`);
     routes.append(link('Transit · Naver (live arrivals)',naverRouteUrl(p,'transit',userLoc)),link('Walking · Naver',naverRouteUrl(p,'walk',userLoc)),link('Transit · Google',googleRouteUrl(p,userLoc)));
-    article.append(sources,routes,el('p','route-note','Tapping a route link opens Naver Maps and shares your location with Naver.'),directions);return article;
+    article.append(sources,routes,el('p','route-note','Route links open Naver Maps or Google Maps. With Near me on, they share your location with that service.'),directions);return article;
   }
   function renderPlaces() {
     visible=filterPlaces(records,filters);

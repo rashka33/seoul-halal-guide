@@ -172,7 +172,7 @@ class RouteLinkTests(FeatureTestCase):
     def test_every_card_discloses_what_a_route_link_shares(self):
         page = self.open()
         expect(page.locator('.routes + .route-note')).to_have_count(3)
-        expect(page.locator('.route-note').first).to_have_text('Tapping a route link opens Naver Maps and shares your location with Naver.')
+        expect(page.locator('.route-note').first).to_have_text('Route links open Naver Maps or Google Maps. With Near me on, they share your location with that service.')
 
     def test_station_and_time_render_only_when_present(self):
         page = self.open(places=[place('a', 'With', 'restaurant', 37.534, 126.996, nearestStation='Itaewon Station (Line 6), Exit 3', transitTime='About 12 min by subway'), place('b', 'Without', 'restaurant', 37.535, 126.996)])

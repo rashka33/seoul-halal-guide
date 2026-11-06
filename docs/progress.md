@@ -13,7 +13,8 @@ Accessibility: current Vercel web-interface guidelines reviewed. Semantic contro
 Test-environment corrections: replaced fixed countdown sleep with condition-based assertion; expected auto-toggle immediate reset is tested with click rather than check; fixture downloads use system TLS instead of Python’s missing CA store. These did not require production changes.
 Additions from TASK_BRIEF (2026-11-04): Near me, route links and transit fields, café type with four hidden seeds, Useful Korean, service worker for offline, live Qibla compass. 39 tests pass.
 Ruling: supplied data/phrases.js did not parse (missing commas after lines 43 and 77). Owner approved adding only those commas; test confirms the file otherwise hashes to the supplied bytes. The commas were found already applied on disk at 01:56, not by this agent.
-Ruling: map.naver.com is blocked in the built-in browser and Claude in Chrome was not connected, so the Naver web directions format is NOT yet demonstrated to open a routed page. Needs a tap test.
+Ruling: map.naver.com is blocked in the built-in browser and Claude in Chrome was not connected, so the agent could not test the Naver web directions format itself (see the owner's result below).
 Open question for owner: Near me re-centering requests OSM tiles for the user's area, which reveals that area to OSM. Required by the brief; disclosed on the page.
 Café coordinates come from OSM Nominatim lookups of the published addresses. Plant resolved to street level only.
 Owner-requested edits (2026-11-06): route-link disclosure line added verbatim; Baraka Cafe basis reworded so the card makes no halal claim; line 47 romanization corrected to sewojuseyo with the Hangul unchanged.
+Naver tap test by owner (2026-11-06): passed. The mosque-to-Plant transit link loaded a transit route (best route 13 minutes by bus). naverRouteUrl unchanged. The walk mode and My location start use the same format but were not opened.

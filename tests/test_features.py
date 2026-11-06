@@ -188,11 +188,11 @@ class RouteLinkTests(FeatureTestCase):
         self.assertNotIn('Nearest station', page.locator('#place-b').inner_text())
         self.assertNotIn('Typical:', page.locator('#place-b').inner_text())
 
-    def test_seed_data_leaves_station_and_time_empty(self):
+    def test_real_data_never_guesses_journey_time(self):
         page = self.open(places=None)
-        fields = page.evaluate('PLACES.map(p => [p.nearestStation, p.transitTime])')
-        self.assertTrue(fields)
-        self.assertTrue(all(field == ['', ''] for field in fields))
+        times = page.evaluate('PLACES.map(p => p.transitTime)')
+        self.assertTrue(times)
+        self.assertEqual(set(times), {''})
 
 class CafeTests(FeatureTestCase):
     CAFES = FIXTURE + [
@@ -229,21 +229,22 @@ class CafeTests(FeatureTestCase):
         page = self.open(places=[place('old', 'Old Cafe', 'cafe', 37.5335, 126.9965, lastChecked=''), place('near', 'Near Grill', 'restaurant', 37.534, 126.996)])
         self.assertEqual(self.card_ids(page), ['near'])
 
-    def test_seed_cafes_match_the_brief_and_stay_hidden(self):
+    def test_seed_cafes_keep_the_recorded_facts(self):
         page = self.open(places=None)
         seeds = {c['id']: c for c in page.evaluate("PLACES.filter(p => p.type === 'cafe')")}
         self.assertEqual({k: (v['wifi'], v['alcoholServed']) for k, v in seeds.items()}, {
             'baraka-cafe': (None, False), 'plant': (True, True), 'downt-espresso': (True, None), 'coffee-lab': (True, True)})
         for seed in seeds.values():
-            self.assertEqual((seed['tier'], seed['lastChecked']), ('unverified', ''))
+            self.assertEqual(seed['tier'], 'unverified')
             self.assertGreaterEqual(len(seed['sources']), 2)
-        self.assertEqual(seeds['plant']['vegetarianOptions'], 'Fully vegan menu')
-        for id in ('plant', 'downt-espresso', 'coffee-lab'):
-            self.assertIn('foreigner-visitor reviews', seeds[id]['halalBasis'])
-        for seed in seeds.values():
             self.assertIn('not a halal claim', seed['halalBasis'])
             self.assertIn('Evidence type:', seed['halalBasis'])
-        self.assertEqual(page.locator('.place-card[id*="cafe"]').count(), 0)
+        self.assertEqual(seeds['plant']['vegetarianOptions'], 'Fully vegan menu')
+        self.assertEqual(seeds['plant']['address'], '117 Bogwang-ro, Yongsan-gu, Seoul')
+        for id in ('plant', 'downt-espresso', 'coffee-lab'):
+            self.assertIn('foreigner-visitor reviews', seeds[id]['halalBasis'])
+        expect(page.locator('#place-coffee-lab')).to_have_count(0)
+        expect(page.locator('#place-plant')).to_have_count(1)
 
 class PhraseTests(FeatureTestCase):
     def test_all_phrases_render_with_all_three_lines(self):
@@ -585,13 +586,20 @@ class AppExperienceTests(FeatureTestCase):
 
     def test_real_data_explains_the_places_still_waiting(self):
         page = self.phone(places=None)
-        expect(page.locator('#pending-count')).to_have_text('14 more places are waiting for a check')
-        expect(page.locator('#pending-detail')).to_contain_text('8 restaurants, 2 groceries and 4 cafés')
+        expect(page.locator('#pending-count')).to_have_text('6 more places are waiting for a check')
+        expect(page.locator('#pending-detail')).to_contain_text('4 restaurants, 1 grocery and 1 café')
+        expect(page.locator('.place-card')).to_have_count(9)
+        page.locator('#type-filter').select_option('prayer_room')
+        expect(page.locator('#empty-title')).to_have_text('No places match these filters')
+        page.locator('#reset-filters').click()
+        expect(page.locator('.place-card')).to_have_count(9)
+
+    def test_empty_type_with_waiting_places_explains_itself(self):
+        waiting = [place('seoul-central-mosque', 'Seoul Central Mosque', 'mosque', 37.5331, 126.9969), place('c', 'Waiting Cafe', 'cafe', 37.5335, 126.9965, lastChecked='')]
+        page = self.phone(places=waiting)
         page.locator('#type-filter').select_option('cafe')
         expect(page.locator('#empty-title')).to_have_text('No cafés checked yet')
-        expect(page.locator('#empty-text')).to_contain_text('4 cafés waiting for a check')
-        page.locator('#reset-filters').click()
-        expect(page.locator('.place-card')).to_have_count(1)
+        expect(page.locator('#empty-text')).to_contain_text('1 café waiting for a check')
 
     def test_filter_mismatch_gets_generic_empty_message(self):
         page = self.phone()
@@ -628,11 +636,17 @@ class IntegrityTests(unittest.TestCase):
             data = data.replace(tail, tail.replace(b'},', b'}'))
         self.assertEqual(hashlib.sha256(data).hexdigest(), 'd0a945f4226f0296cd0e5f9cbce94f01403383cb68b6ee0291bca0ae1f440bdd')
 
-    def test_every_seed_is_unverified_with_no_check_date(self):
-        text = (ROOT / 'data/places.js').read_text()
-        records = re.findall(r"^  \{id:'([^']+)'.*$", text, re.M)
-        lines = [line for line in text.splitlines() if line.startswith("  {id:'")]
-        self.assertEqual(len(records), 14)
-        for line in lines:
-            self.assertIn("lastChecked:''", line)
-            self.assertIn("tier:'unverified'", line)
+    APPROVED = {'eid': 'cross_checked', 'kervan': 'self_declared', 'mr-kebab': 'self_declared', 'jipbab': 'cross_checked', 'foreign-food-mart': 'unverified', 'baraka-cafe': 'unverified', 'plant': 'unverified', 'downt-espresso': 'unverified'}
+    REJECTED = {'makan', 'istanbul-delight', 'pasha', 'salam', 'national-foods-mart', 'coffee-lab'}
+
+    def test_only_owner_approved_places_carry_a_check_date(self):
+        lines = [line for line in (ROOT / 'data/places.js').read_text().splitlines() if line.startswith("  {id:'")]
+        seen = {re.match(r"  \{id:'([^']+)'", line).group(1): line for line in lines}
+        self.assertEqual(set(seen), set(self.APPROVED) | self.REJECTED)
+        for id, tier in self.APPROVED.items():
+            self.assertRegex(seen[id], r"lastChecked:'\d{4}-\d{2}-\d{2}'", id)
+            self.assertIn(f"tier:'{tier}'", seen[id])
+            self.assertRegex(seen[id], r"sources:\['https://", id)
+        for id in self.REJECTED:
+            self.assertIn("lastChecked:''", seen[id], id)
+            self.assertIn("tier:'unverified'", seen[id], id)
